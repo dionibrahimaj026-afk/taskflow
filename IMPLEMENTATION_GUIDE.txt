@@ -1,0 +1,266 @@
+================================================================================
+                    TASKFLOW - IMPLEMENTATION GUIDE
+================================================================================
+
+This document explains how the TaskFlow webapp was built, including architecture,
+data flow, and diagrams.
+
+================================================================================
+                          1. PROJECT STRUCTURE
+================================================================================
+
+    taskflow/
+    |
+    +-- backend/                    # Node.js + Express REST API
+    |   +-- src/
+    |   |   +-- config/
+    |   |   |   +-- db.js            # MongoDB connection
+    |   |   |
+    |   |   +-- middleware/
+    |   |   |   +-- auth.js           # JWT protect + admin check
+    |   |   |   +-- errorHandler.js  # Global error handler
+    |   |   +-- models/
+    |   |   |   +-- User.js
+    |   |   |   +-- Project.js
+    |   |   |   +-- Task.js
+    |   |   +-- routes/
+    |   |   |   +-- auth.js
+    |   |   |   +-- users.js
+    |   |   |   +-- projects.js
+    |   |   |   +-- tasks.js
+    |   |   |
+    |   |   +-- index.js              # App entry, routes, middleware
+    |   +-- .env.example              # Template (copy to .env)
+    |   +-- package.json
+    |
+    +-- frontend/                    # React + Vite + Bootstrap
+    |   +-- src/
+    |   |   +-- components/
+    |   |   |   +-- Layout.jsx
+    |   |   |   +-- KanbanBoard.jsx
+    |   |   |
+    |   |   +-- context/
+    |   |   |   +-- AuthContext.jsx    # User state, login/logout
+    |   |   +-- pages/
+    |   |   |   +-- Login.jsx
+    |   |   |   +-- Signup.jsx
+    |   |   |   +-- AuthCallback.jsx
+    |   |   |   +-- Dashboard.jsx
+    |   |   |   +-- ProjectDetail.jsx
+    |   |   |   +-- Profile.jsx
+    |   |   |   +-- AdminUsers.jsx
+    |   |   +-- utils/
+    |   |   |   +-- api.js             # fetch wrapper with JWT
+    |   |   +-- App.jsx
+    |   |   +-- main.jsx
+    |   +-- index.html
+    |   +-- package.json
+    |   +-- vite.config.js            # Proxy /api -> backend
+    |
+    +-- .gitignore
+    +-- README.md
+    +-- package.json
+
+
+================================================================================
+                    2. SYSTEM ARCHITECTURE DIAGRAM
+================================================================================
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                           BROWSER (User)                                 │
+    └─────────────────────────────────┬───────────────────────────────────────┘
+                                      │
+                                      │ HTTP (localhost:3000)
+                                      ▼
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                     VITE DEV SERVER (Frontend)                           │
+    │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
+    │  │   React     │  │  React      │  │   Auth      │  │  api.js         │  │
+    │  │   Router    │  │  Bootstrap  │  │   Context   │  │  (fetch + JWT)   │  │
+    │  └─────────────┘  └─────────────┘  └─────────────┘  └────────┬────────┘  │
+    └──────────────────────────────────────────────────────────────┼──────────┘
+                                                                   │
+                         /api/* proxied to localhost:5000          │
+                                                                   ▼
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                     EXPRESS SERVER (Backend :5000)                       │
+    │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────────┐  │
+    │  │   CORS       │  │   JWT        │  │   Routes                      │  │
+    │  │   JSON body  │  │   Auth       │  │   /auth, /users, /projects,    │  │
+    │  │              │  │   middleware │  │   /tasks                      │  │
+    │  └──────────────┘  └──────────────┘  └──────────────┬───────────────┘  │
+    └────────────────────────────────────────────────────┼───────────────────┘
+                                                         │
+                                                         │ Mongoose
+                                                         ▼
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                         MONGODB                                         │
+    │  ┌─────────┐   ┌─────────┐   ┌─────────┐                               │
+    │  │  users  │   │projects │   │  tasks  │                               │
+    │  └─────────┘   └─────────┘   └─────────┘                               │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+                    3. AUTHENTICATION FLOW DIAGRAM
+================================================================================
+
+    EMAIL LOGIN:
+    ────────────
+
+    User                Frontend              Backend               MongoDB
+      │                     │                    │                     │
+      │  Enter email/pwd     │                    │                     │
+      │────────────────────>│                    │                     │
+      │                     │  POST /auth/login   │                     │
+      │                     │───────────────────>│                     │
+      │                     │                    │  findOne + compare   │
+      │                     │                    │  password            │
+      │                     │                    │────────────────────>│
+      │                     │                    │<────────────────────│
+      │                     │                    │  sign JWT            │
+      │                     │  { token, user }    │                     │
+      │                     │<───────────────────│                     │
+      │  Store token in     │                    │                     │
+      │  localStorage       │                    │                     │
+      │<────────────────────│                    │                     │
+      │  Redirect to /       │                    │                     │
+      │<────────────────────│                    │                     │
+
+
+================================================================================
+                    4. DATA MODEL DIAGRAM (MongoDB)
+================================================================================
+
+    ┌─────────────────────┐
+    │       User          │
+    ├─────────────────────┤
+    │ _id                  │
+    │ email (optional)     │
+    │ password (optional)  │
+    │ name                 │
+    │ avatar               │
+    │                      │
+    │ role: user|admin     │
+    │ createdAt            │
+    └──────────┬──────────┘
+               │
+               │ createdBy (ref)
+               │ members[] (ref)
+               ▼
+    ┌─────────────────────┐         ┌─────────────────────┐
+    │      Project        │◄────────│       Task          │
+    ├─────────────────────┤ 1    n │                     │
+    │ _id                  │         ├─────────────────────┤
+    │ title                 │         │ _id                 │
+    │ description           │         │ title               │
+    │                      │         │ description         │
+    │                      │         │ status: To Do |     │
+    │ createdBy ────────────┼─────────│   In Progress | Done│
+    │ members[]             │         │ project ────────────┤
+    │ createdAt, updatedAt  │         │ assignedTo ─────────┼──► User
+    └─────────────────────┘         │ order                │
+                                    │ createdAt, updatedAt  │
+                                    └─────────────────────┘
+
+
+================================================================================
+                    5. REQUEST FLOW (Protected Route)
+================================================================================
+
+    Frontend                    Backend
+       │                          │
+       │  GET /api/projects       │
+       │  Authorization: Bearer <token>
+       │────────────────────────>│
+       │                          │ protect middleware
+       │                          │   │
+       │                          │   ├─ extract token from header
+       │                          │   ├─ jwt.verify(token)
+       │                          │   ├─ load User by id
+       │                          │   └─ req.user = user
+       │                          │
+       │                          │ route handler
+       │                          │   Project.find({ createdBy or members })
+       │                          │
+       │  [ { projects } ]        │
+       │<────────────────────────│
+
+
+================================================================================
+                    6. KANBAN BOARD WORKFLOW
+================================================================================
+
+    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+    │   TO DO     │    │ IN PROGRESS  │    │    DONE     │
+    ├─────────────┤    ├─────────────┤    ├─────────────┤
+    │             │    │             │    │             │
+    │  [Task A]   │───►│  [Task B]   │───►│  [Task C]   │
+    │  [Task D]   │    │             │    │             │
+    │             │    │             │    │             │
+    └─────────────┘    └─────────────┘    └─────────────┘
+          │                   │                   │
+          │    User drags or uses dropdown        │
+          │    to change status                   │
+          └───────────────────┴───────────────────┘
+                              │
+                              ▼
+                    PUT /api/tasks/:id
+                    { status: "In Progress" }
+
+
+================================================================================
+                    7. .GITIGNORE - WHAT WE EXCLUDE
+================================================================================
+
+    node_modules/     → Dependencies (reinstall with npm install)
+    .env             → Secrets (JWT_SECRET, MongoDB URI)
+    frontend/dist/   → Build output (regenerated on npm run build)
+    *.log            → Log files
+    .idea/, .vscode/ → IDE settings (personal)
+    .DS_Store        → OS metadata
+
+    We keep: .env.example (template without real secrets)
+
+
+================================================================================
+                    9. HOW EACH FEATURE WAS IMPLEMENTED
+================================================================================
+
+    AUTHENTICATION
+    --------------
+    • Email: bcrypt hashes password, express-validator validates input
+    • JWT: jsonwebtoken signs { id } with 7d expiry
+    •
+    • protect middleware: checks Authorization header, verifies JWT, loads user
+
+    USER MANAGEMENT
+    ---------------
+    • GET /users/list: any auth user (for task assignment dropdown)
+    • GET/PUT/DELETE /users/:id: self or admin only
+    • Role: stored in User.role, adminOnly middleware for /users (full list)
+
+    PROJECTS & TASKS
+    ----------------
+    • Projects: creator + members can access
+    • Tasks: belong to project, only project members can CRUD
+    • Kanban: tasks filtered by status, dropdown/drag updates status
+
+    FRONTEND
+    --------
+    • AuthContext: holds user, token in localStorage, fetches /auth/me on load
+    • api.js: adds Bearer token to all requests
+    • PrivateRoute: redirects to /login if no user
+    • Vite proxy: /api → backend :5000
+
+
+================================================================================
+                    10. QUICK REFERENCE
+================================================================================
+
+    Start backend:   cd backend && npm run dev
+    Start frontend:  cd frontend && npm run dev
+    First user:     Becomes admin automatically
+    MongoDB:        Required; use local or Atlas
+
+================================================================================
