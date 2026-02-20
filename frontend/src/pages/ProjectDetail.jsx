@@ -12,7 +12,7 @@ export default function ProjectDetail() {
   const [error, setError] = useState('');
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [taskForm, setTaskForm] = useState({ title: '', description: '', assignedTo: '' });
+  const [taskForm, setTaskForm] = useState({ title: '', description: '', assignedTo: '', priority: 'Medium' });
   const [projectForm, setProjectForm] = useState({});
   const [users, setUsers] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -68,7 +68,7 @@ export default function ProjectDetail() {
         project: id,
         assignedTo: taskForm.assignedTo || undefined,
       });
-      setTaskForm({ title: '', description: '', assignedTo: '' });
+      setTaskForm({ title: '', description: '', assignedTo: '', priority: 'Medium' });
       setShowTaskModal(false);
       fetchTasks();
     } catch (err) {
@@ -156,6 +156,7 @@ export default function ProjectDetail() {
         tasks={tasks}
         isCreator={true}
         onStatusChange={(task, status) => handleUpdateTask(task._id, { status })}
+        onPriorityChange={(task, priority) => handleUpdateTask(task._id, { priority })}
         onAssigneeChange={(task, assignedTo) => handleUpdateTask(task._id, { assignedTo: assignedTo || null })}
         onDelete={handleDeleteTask}
         users={users}
@@ -187,6 +188,18 @@ export default function ProjectDetail() {
                 placeholder="Add details about this task..."
                 required
               />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Priority</Form.Label>
+              <Form.Select
+                value={taskForm.priority}
+                onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value })}
+              >
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Urgent">Urgent</option>
+              </Form.Select>
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Label>Assign to</Form.Label>

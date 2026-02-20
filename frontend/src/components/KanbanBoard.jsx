@@ -7,10 +7,18 @@ const COLUMNS = [
   { key: "Done", label: "Done", variant: "success" },
 ];
 
+const PRIORITIES = [
+  { key: "Low", label: "Low", variant: "secondary" },
+  { key: "Medium", label: "Medium", variant: "info" },
+  { key: "High", label: "High", variant: "warning" },
+  { key: "Urgent", label: "Urgent", variant: "danger" },
+];
+
 export default function KanbanBoard({
   tasks,
   isCreator = false,
   onStatusChange,
+  onPriorityChange,
   onAssigneeChange,
   onDelete,
   users = [],
@@ -64,8 +72,16 @@ export default function KanbanBoard({
                   }
                 >
                   <Card.Body className="py-2">
-                    <div className="d-flex justify-content-between">
-                      <strong>{task.title}</strong>
+                    <div className="d-flex justify-content-between align-items-start">
+                      <div>
+                        <strong>{task.title}</strong>
+                        <Badge
+                          bg={PRIORITIES.find((p) => p.key === (task.priority || "Medium"))?.variant || "secondary"}
+                          className="ms-2"
+                        >
+                          {task.priority || "Medium"}
+                        </Badge>
+                      </div>
                       {isCreator && (
                         <button
                           className="btn btn-sm btn-link text-danger p-0"
@@ -78,10 +94,24 @@ export default function KanbanBoard({
                     <p className="small text-muted mb-1 mt-1">
                       {task.description || 'No description'}
                     </p>
-                    <div className="d-flex justify-content-between align-items-center mt-2">
-                      <div>
+                    <div className="d-flex flex-wrap justify-content-between align-items-center mt-2 gap-1">
+                      <div className="d-flex flex-wrap gap-1">
                         {isCreator ? (
                           <>
+                            <Form.Select
+                              size="sm"
+                              className="form-select-sm w-auto"
+                              value={task.priority || "Medium"}
+                              onChange={(e) =>
+                                onPriorityChange?.(task, e.target.value)
+                              }
+                            >
+                              {PRIORITIES.map((p) => (
+                                <option key={p.key} value={p.key}>
+                                  {p.label}
+                                </option>
+                              ))}
+                            </Form.Select>
                             <Form.Select
                               size="sm"
                               className="form-select-sm w-auto d-inline-block me-1"
@@ -119,6 +149,9 @@ export default function KanbanBoard({
                                 → {task.assignedTo.name}
                               </small>
                             )}
+                            <Badge bg={PRIORITIES.find((p) => p.key === (task.priority || "Medium"))?.variant || "secondary"} className="me-1">
+                              {task.priority || "Medium"}
+                            </Badge>
                             <Badge bg="secondary">{task.status}</Badge>
                           </span>
                         )}

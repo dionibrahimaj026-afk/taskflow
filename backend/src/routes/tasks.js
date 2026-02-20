@@ -37,6 +37,7 @@ router.post(
     body('project').notEmpty().withMessage('Project is required'),
     body('description').trim().notEmpty().withMessage('Description is required'),
     body('status').optional().isIn(['Todo', 'Active', 'Testing', 'Done']),
+    body('priority').optional().isIn(['Low', 'Medium', 'High', 'Urgent']),
   ],
   async (req, res) => {
     try {
@@ -63,6 +64,7 @@ router.put(
     body('title').optional().trim().notEmpty(),
     body('description').optional(),
     body('status').optional().isIn(['Todo', 'Active', 'Testing', 'Done']),
+    body('priority').optional().isIn(['Low', 'Medium', 'High', 'Urgent']),
     body('assignedTo').optional(),
     body('order').optional().isNumeric(),
   ],
