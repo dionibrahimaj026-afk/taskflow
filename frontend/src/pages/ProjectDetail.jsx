@@ -173,6 +173,7 @@ export default function ProjectDetail() {
               <Form.Control
                 value={taskForm.title}
                 onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
+                placeholder="Brief task title"
                 required
               />
             </Form.Group>
@@ -180,9 +181,11 @@ export default function ProjectDetail() {
               <Form.Label>Description</Form.Label>
               <Form.Control
                 as="textarea"
-                rows={2}
+                rows={4}
                 value={taskForm.description}
                 onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
+                placeholder="Add details about this task..."
+                required
               />
             </Form.Group>
             <Form.Group className="mb-3">

@@ -1,8 +1,9 @@
 import { Row, Col, Card, Badge, Form } from "react-bootstrap";
 
 const COLUMNS = [
-  { key: "To Do", label: "To Do", variant: "secondary" },
-  { key: "In Progress", label: "In Progress", variant: "primary" },
+  { key: "Todo", label: "Todo", variant: "secondary" },
+  { key: "Active", label: "Active", variant: "primary" },
+  { key: "Testing", label: "Testing", variant: "info" },
   { key: "Done", label: "Done", variant: "success" },
 ];
 
@@ -22,7 +23,7 @@ export default function KanbanBoard({
   return (
     <Row>
       {COLUMNS.map((col) => (
-        <Col key={col.key} md={4}>
+        <Col key={col.key} md={6} lg={3}>
           <Card className="mb-3">
             <Card.Header className="d-flex justify-content-between align-items-center">
               <Badge bg={col.variant}>{col.label}</Badge>
@@ -74,49 +75,10 @@ export default function KanbanBoard({
                         </button>
                       )}
                     </div>
-                    {task.description && (
-                      <p className="small text-muted mb-1 mt-1">
-                        {task.description}
-                      </p>
-                    )}
+                    <p className="small text-muted mb-1 mt-1">
+                      {task.description || 'No description'}
+                    </p>
                     <div className="d-flex justify-content-between align-items-center mt-2">
-                      <div>
-                        {task.status === "To Do" && (
-                          <button
-                            className="btn btn-sm btn-primary me-1"
-                            onClick={() => onStatusChange(task, "In Progress")}
-                          >
-                            Start
-                          </button>
-                        )}
-
-                        {task.status === "In Progress" && (
-                          <>
-                            <button
-                              className="btn btn-sm btn-success me-1"
-                              onClick={() => onStatusChange(task, "Done")}
-                            >
-                              Complete
-                            </button>
-                            <button
-                              className="btn btn-sm btn-outline-secondary me-1"
-                              onClick={() => onStatusChange(task, "To Do")}
-                            >
-                              Back
-                            </button>
-                          </>
-                        )}
-
-                        {task.status === "Done" && (
-                          <button
-                            className="btn btn-sm btn-warning me-1"
-                            onClick={() => onStatusChange(task, "In Progress")}
-                          >
-                            Cancel
-                          </button>
-                        )}
-                      </div>
-
                       <div>
                         {isCreator ? (
                           <>

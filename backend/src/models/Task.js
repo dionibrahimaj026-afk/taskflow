@@ -8,12 +8,13 @@ const taskSchema = new mongoose.Schema({
   },
   description: {
     type: String,
-    default: '',
+    required: true,
+    trim: true,
   },
   status: {
     type: String,
-    enum: ['To Do', 'In Progress', 'Done'],
-    default: 'To Do',
+    enum: ['Todo', 'Active', 'Testing', 'Done'],
+    default: 'Todo',
   },
   project: {
     type: mongoose.Schema.Types.ObjectId,
@@ -29,15 +30,7 @@ const taskSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
-  },
-});
+}, { timestamps: true });
 
 taskSchema.pre('save', function (next) {
   this.updatedAt = Date.now();
