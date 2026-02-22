@@ -3,6 +3,7 @@ import { Button, Modal, Form, Alert, Spinner, InputGroup } from 'react-bootstrap
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../utils/api';
 import KanbanBoard from '../components/KanbanBoard';
+import ActivityLog from '../components/ActivityLog';
 
 export default function ProjectDetail() {
   const { id } = useParams();
@@ -17,6 +18,7 @@ export default function ProjectDetail() {
   const [projectForm, setProjectForm] = useState({});
   const [users, setUsers] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [activityRefresh, setActivityRefresh] = useState(0);
 
   const fetchProject = async () => {
     try {
@@ -74,6 +76,7 @@ export default function ProjectDetail() {
       setNewSubtaskTitle('');
       setShowTaskModal(false);
       fetchTasks();
+      setActivityRefresh((k) => k + 1);
     } catch (err) {
       setError(err.message || 'Failed to create task');
     } finally {
@@ -85,6 +88,7 @@ export default function ProjectDetail() {
     try {
       await api.put(`/tasks/${taskId}`, updates);
       fetchTasks();
+      setActivityRefresh((k) => k + 1);
     } catch (err) {
       setError(err.message || 'Failed to update task');
     }
@@ -96,6 +100,7 @@ export default function ProjectDetail() {
     try {
       await api.delete(`/tasks/${taskId}`);
       fetchTasks();
+      setActivityRefresh((k) => k + 1);
     } catch (err) {
       setError(err.message || 'Failed to delete');
     }
@@ -156,16 +161,23 @@ export default function ProjectDetail() {
         </Alert>
       )}
 
-      <KanbanBoard
-        tasks={tasks}
-        isCreator={true}
-        onStatusChange={(task, status) => handleUpdateTask(task._id, { status })}
-        onPriorityChange={(task, priority) => handleUpdateTask(task._id, { priority })}
-        onSubtasksChange={(task, subtasks) => handleUpdateTask(task._id, { subtasks })}
-        onAssigneeChange={(task, assignedTo) => handleUpdateTask(task._id, { assignedTo: assignedTo || null })}
-        onDelete={handleDeleteTask}
-        users={users}
-      />
+      <div className="row">
+        <div className="col-lg-8">
+          <KanbanBoard
+            tasks={tasks}
+            isCreator={true}
+            onStatusChange={(task, status) => handleUpdateTask(task._id, { status })}
+            onPriorityChange={(task, priority) => handleUpdateTask(task._id, { priority })}
+            onSubtasksChange={(task, subtasks) => handleUpdateTask(task._id, { subtasks })}
+            onAssigneeChange={(task, assignedTo) => handleUpdateTask(task._id, { assignedTo: assignedTo || null })}
+            onDelete={handleDeleteTask}
+            users={users}
+          />
+        </div>
+        <div className="col-lg-4">
+          <ActivityLog projectId={id} refreshKey={activityRefresh} />
+        </div>
+      </div>
 
       {/* New Task Modal */}
       <Modal show={showTaskModal} onHide={() => { setShowTaskModal(false); setTaskForm({ title: '', description: '', assignedTo: '', priority: 'Medium', subtasks: [] }); setNewSubtaskTitle(''); }}>

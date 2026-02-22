@@ -2,8 +2,11 @@ import express from 'express';
 import { body, validationResult } from 'express-validator';
 import Project from '../models/Project.js';
 import Task from '../models/Task.js';
+import { optionalAuth } from '../middleware/auth.js';
+import { logActivity } from '../utils/logActivity.js';
 
 const router = express.Router();
+router.use(optionalAuth);
 
 // Get all projects
 router.get('/', async (req, res) => {
@@ -44,6 +47,15 @@ router.post(
 
       const project = await Project.create(req.body);
       await project.populate('createdBy', 'name avatar');
+      await logActivity({
+        project: project._id,
+        user: req.user,
+        action: 'project.created',
+        entityType: 'project',
+        entityId: project._id,
+        entityTitle: project.title,
+        details: 'Project created',
+      });
       res.status(201).json(project);
     } catch (err) {
       res.status(500).json({ message: err.message });
@@ -69,6 +81,15 @@ router.put(
         .populate('createdBy', 'name avatar')
         .populate('members', 'name avatar');
       if (!project) return res.status(404).json({ message: 'Project not found' });
+      await logActivity({
+        project: project._id,
+        user: req.user,
+        action: 'project.updated',
+        entityType: 'project',
+        entityId: project._id,
+        entityTitle: project.title,
+        details: 'Project updated',
+      });
       res.json(project);
     } catch (err) {
       res.status(500).json({ message: err.message });
@@ -81,6 +102,15 @@ router.delete('/:id', async (req, res) => {
   try {
     const project = await Project.findByIdAndDelete(req.params.id);
     if (!project) return res.status(404).json({ message: 'Project not found' });
+    await logActivity({
+      project: project._id,
+      user: req.user,
+      action: 'project.deleted',
+      entityType: 'project',
+      entityId: project._id,
+      entityTitle: project.title,
+      details: 'Project deleted',
+    });
     await Task.deleteMany({ project: req.params.id });
     res.json({ message: 'Project deleted' });
   } catch (err) {

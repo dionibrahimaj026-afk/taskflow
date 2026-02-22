@@ -27,3 +27,23 @@ export const protect = async (req, res, next) => {
     return res.status(401).json({ message: 'Session expired - please log in again' });
   }
 };
+
+/** Optionally attach req.user when valid token present; never blocks */
+export const optionalAuth = async (req, res, next) => {
+  let token;
+  if (req.headers.authorization?.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1];
+  } else if (req.cookies?.token) {
+    token = req.cookies.token;
+  }
+  if (!token) return next();
+  try {
+    const secret = process.env.JWT_SECRET || 'dev-secret-change-in-production';
+    const decoded = jwt.verify(token, secret);
+    const userId = decoded?.id ?? decoded?.userId ?? decoded?.sub;
+    if (userId) req.user = await User.findById(userId);
+  } catch {
+    // ignore invalid token
+  }
+  next();
+};
