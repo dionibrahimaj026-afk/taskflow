@@ -39,13 +39,16 @@ router.post(
   [
     body('title').trim().notEmpty().withMessage('Title is required'),
     body('description').optional(),
+    body('dueDate').optional().isISO8601(),
   ],
   async (req, res) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) return res.status(400).json({ message: errors.array()[0].msg });
+      if (!req.user) return res.status(401).json({ message: 'Please log in to create a project' });
 
-      const project = await Project.create(req.body);
+      const payload = { ...req.body, createdBy: req.user._id };
+      const project = await Project.create(payload);
       await project.populate('createdBy', 'name avatar');
       await logActivity({
         project: project._id,
@@ -63,19 +66,30 @@ router.post(
   }
 );
 
-// Update project
+// Update project - only creator can edit
 router.put(
   '/:id',
   [
     body('title').optional().trim().notEmpty(),
     body('description').optional(),
     body('members').optional().isArray(),
+    body('dueDate').optional(),
   ],
   async (req, res) => {
     try {
+      const existing = await Project.findById(req.params.id);
+      if (!existing) return res.status(404).json({ message: 'Project not found' });
+      if (existing.createdBy && (!req.user || String(req.user._id) !== String(existing.createdBy))) {
+        return res.status(403).json({ message: 'Only the project creator can edit this project' });
+      }
+
+      const updates = { ...req.body };
+      if (req.body.dueDate === '' || req.body.dueDate === null) updates.dueDate = null;
+      else if (req.body.dueDate) updates.dueDate = new Date(req.body.dueDate);
+
       const project = await Project.findByIdAndUpdate(
         req.params.id,
-        { $set: req.body },
+        { $set: updates },
         { new: true }
       )
         .populate('createdBy', 'name avatar')
@@ -97,9 +111,15 @@ router.put(
   }
 );
 
-// Delete project
+// Delete project - only creator can delete
 router.delete('/:id', async (req, res) => {
   try {
+    const existing = await Project.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Project not found' });
+    if (existing.createdBy && (!req.user || String(req.user._id) !== String(existing.createdBy))) {
+      return res.status(403).json({ message: 'Only the project creator can delete this project' });
+    }
+
     const project = await Project.findByIdAndDelete(req.params.id);
     if (!project) return res.status(404).json({ message: 'Project not found' });
     await logActivity({

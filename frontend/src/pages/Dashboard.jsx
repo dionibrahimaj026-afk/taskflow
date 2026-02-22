@@ -11,13 +11,15 @@ import {
 } from "react-bootstrap";
 import { Link } from "react-router-dom";
 import { api } from "../utils/api";
+import { useAuth } from "../context/AuthContext";
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ title: "", description: "" });
+  const [form, setForm] = useState({ title: "", description: "", dueDate: "" });
   const [submitting, setSubmitting] = useState(false);
 
   const fetchProjects = async () => {
@@ -40,8 +42,12 @@ export default function Dashboard() {
     setSubmitting(true);
     setError("");
     try {
-      await api.post("/projects", form);
-      setForm({ title: "", description: "" });
+      await api.post("/projects", {
+        title: form.title,
+        description: form.description,
+        dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : undefined,
+      });
+      setForm({ title: "", description: "", dueDate: "" });
       setShowModal(false);
       fetchProjects();
     } catch (err) {
@@ -73,11 +79,16 @@ export default function Dashboard() {
     <>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1>My Projects</h1>
-        <Button variant="primary" onClick={() => setShowModal(true)}>
+        <Button variant="primary" onClick={() => setShowModal(true)} disabled={!user} title={!user ? "Log in to create a project" : ""}>
           New Project
         </Button>
       </div>
 
+      {!user && (
+        <Alert variant="info">
+          <Alert.Link as={Link} to="/login">Log in</Alert.Link> to create projects and set due dates.
+        </Alert>
+      )}
       {error && (
         <Alert variant="danger" dismissible onClose={() => setError("")}>
           {error}
@@ -93,6 +104,11 @@ export default function Dashboard() {
                 <Card.Text className="text-muted small">
                   {p.description || "No description"}
                 </Card.Text>
+                {p.dueDate && (
+                  <Card.Text className="small">
+                    Due: {new Date(p.dueDate).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
+                  </Card.Text>
+                )}
                 <div className="mt-3 d-flex gap-2">
                   <Button
                     as={Link}
@@ -102,13 +118,15 @@ export default function Dashboard() {
                   >
                     Open
                   </Button>
-                  <Button
-                    variant="outline-danger"
-                    size="sm"
-                    onClick={() => handleDelete(p._id)}
-                  >
-                    Delete
-                  </Button>
+                  {p.createdBy && user && String(p.createdBy?._id ?? p.createdBy) === String(user.id) && (
+                    <Button
+                      variant="outline-danger"
+                      size="sm"
+                      onClick={() => handleDelete(p._id)}
+                    >
+                      Delete
+                    </Button>
+                  )}
                 </div>
               </Card.Body>
             </Card>
@@ -148,6 +166,15 @@ export default function Dashboard() {
                   setForm({ ...form, description: e.target.value })
                 }
               />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Due date & time</Form.Label>
+              <Form.Control
+                type="datetime-local"
+                value={form.dueDate}
+                onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
+              />
+              <Form.Text className="text-muted">When should this project be finished (optional)</Form.Text>
             </Form.Group>
           </Modal.Body>
           <Modal.Footer>

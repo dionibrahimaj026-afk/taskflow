@@ -18,15 +18,11 @@ const projectSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
   }],
-  createdAt: {
+  dueDate: {
     type: Date,
-    default: Date.now,
+    default: null,
   },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
-  },
-});
+}, { timestamps: true });
 
 projectSchema.pre('save', function (next) {
   this.updatedAt = Date.now();

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button, Modal, Form, Alert, Spinner, InputGroup } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 import KanbanBoard from '../components/KanbanBoard';
 import ActivityLog from '../components/ActivityLog';
 
@@ -24,7 +25,10 @@ export default function ProjectDetail() {
     try {
       const data = await api.get(`/projects/${id}`);
       setProject(data);
-      setProjectForm({ title: data.title, description: data.description });
+      const dueVal = data.dueDate
+        ? new Date(data.dueDate).toISOString().slice(0, 16)
+        : '';
+      setProjectForm({ title: data.title, description: data.description, dueDate: dueVal });
     } catch (err) {
       setError(err.message || 'Failed to load project');
     }
@@ -113,6 +117,7 @@ export default function ProjectDetail() {
       await api.put(`/projects/${id}`, projectForm);
       setShowEditModal(false);
       fetchProject();
+      setActivityRefresh((k) => k + 1);
     } catch (err) {
       setError(err.message || 'Failed to update project');
     } finally {
@@ -132,6 +137,8 @@ export default function ProjectDetail() {
     return <Alert variant="danger">Project not found</Alert>;
   }
 
+  const isCreator = project.createdBy && user && String(project.createdBy?._id ?? project.createdBy) === String(user.id);
+
   return (
     <>
       <div className="d-flex justify-content-between align-items-center mb-3">
@@ -142,9 +149,11 @@ export default function ProjectDetail() {
           <h1 className="d-inline">{project.title}</h1>
         </div>
         <div>
-          <Button variant="outline-secondary" onClick={() => setShowEditModal(true)}>
-            Edit Project
-          </Button>
+          {isCreator && (
+            <Button variant="outline-secondary" onClick={() => setShowEditModal(true)}>
+              Edit Project
+            </Button>
+          )}
           <Button variant="primary" className="ms-2" onClick={() => setShowTaskModal(true)}>
             New Task
           </Button>
@@ -153,6 +162,15 @@ export default function ProjectDetail() {
 
       {project.description && (
         <p className="text-muted mb-4">{project.description}</p>
+      )}
+      {project.dueDate && (
+        <p className="mb-4">
+          <strong>Due:</strong>{' '}
+          {new Date(project.dueDate).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+          {new Date(project.dueDate) < new Date() && (
+            <span className="text-danger ms-2">(overdue)</span>
+          )}
+        </p>
       )}
 
       {error && (
@@ -325,6 +343,14 @@ export default function ProjectDetail() {
                 rows={2}
                 value={projectForm.description || ''}
                 onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })}
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Due date & time</Form.Label>
+              <Form.Control
+                type="datetime-local"
+                value={projectForm.dueDate || ''}
+                onChange={(e) => setProjectForm({ ...projectForm, dueDate: e.target.value })}
               />
             </Form.Group>
           </Modal.Body>
