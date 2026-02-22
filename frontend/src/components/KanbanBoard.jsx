@@ -1,4 +1,5 @@
-import { Row, Col, Card, Badge, Form } from "react-bootstrap";
+import { useState } from "react";
+import { Row, Col, Card, Badge, Form, InputGroup } from "react-bootstrap";
 
 const COLUMNS = [
   { key: "Todo", label: "Todo", variant: "secondary" },
@@ -19,10 +20,13 @@ export default function KanbanBoard({
   isCreator = false,
   onStatusChange,
   onPriorityChange,
+  onSubtasksChange,
   onAssigneeChange,
   onDelete,
   users = [],
 }) {
+  const [newSubtask, setNewSubtask] = useState({});
+
   const tasksByStatus = COLUMNS.reduce((acc, col) => {
     acc[col.key] = tasks.filter((t) => t.status === col.key);
     return acc;
@@ -94,6 +98,87 @@ export default function KanbanBoard({
                     <p className="small text-muted mb-1 mt-1">
                       {task.description || 'No description'}
                     </p>
+                    {(task.subtasks?.length > 0 || isCreator) && (
+                      <div className="mb-2">
+                        <small className="text-muted d-block mb-1">
+                          Subtasks
+                          {task.subtasks?.length > 0 && (
+                            <span className="ms-1">
+                              ({task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length})
+                            </span>
+                          )}
+                        </small>
+                        {(task.subtasks || []).map((st, i) => (
+                          <div key={st._id || i} className="d-flex align-items-center gap-1 mb-1">
+                            {isCreator ? (
+                              <>
+                                <Form.Check
+                                  type="checkbox"
+                                  checked={!!st.completed}
+                                  onChange={() => {
+                                    const updated = [...(task.subtasks || [])];
+                                    updated[i] = { ...updated[i], completed: !updated[i].completed };
+                                    onSubtasksChange?.(task, updated);
+                                  }}
+                                />
+                                <span className={st.completed ? 'text-decoration-line-through text-muted' : ''} style={{ flex: 1 }}>
+                                  {st.title}
+                                </span>
+                                <button
+                                  className="btn btn-sm btn-link text-danger p-0"
+                                  onClick={() => {
+                                    const updated = (task.subtasks || []).filter((_, idx) => idx !== i);
+                                    onSubtasksChange?.(task, updated);
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <Form.Check type="checkbox" checked={!!st.completed} disabled />
+                                <span className={st.completed ? 'text-decoration-line-through text-muted' : ''}>
+                                  {st.title}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                        {isCreator && (
+                          <InputGroup size="sm" className="mt-1">
+                            <Form.Control
+                              placeholder="Add subtask..."
+                              value={newSubtask[task._id] || ''}
+                              onChange={(e) => setNewSubtask({ ...newSubtask, [task._id]: e.target.value })}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  const title = (newSubtask[task._id] || '').trim();
+                                  if (title) {
+                                    onSubtasksChange?.(task, [...(task.subtasks || []), { title, completed: false }]);
+                                    setNewSubtask({ ...newSubtask, [task._id]: '' });
+                                  }
+                                }
+                              }}
+                            />
+                            <InputGroup.Text
+                              as="button"
+                              type="button"
+                              className="btn btn-outline-primary"
+                              onClick={() => {
+                                const title = (newSubtask[task._id] || '').trim();
+                                if (title) {
+                                  onSubtasksChange?.(task, [...(task.subtasks || []), { title, completed: false }]);
+                                  setNewSubtask({ ...newSubtask, [task._id]: '' });
+                                }
+                              }}
+                            >
+                              +
+                            </InputGroup.Text>
+                          </InputGroup>
+                        )}
+                      </div>
+                    )}
                     <div className="d-flex flex-wrap justify-content-between align-items-center mt-2 gap-1">
                       <div className="d-flex flex-wrap gap-1">
                         {isCreator ? (

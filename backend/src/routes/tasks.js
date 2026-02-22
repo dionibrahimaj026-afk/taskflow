@@ -38,6 +38,9 @@ router.post(
     body('description').trim().notEmpty().withMessage('Description is required'),
     body('status').optional().isIn(['Todo', 'Active', 'Testing', 'Done']),
     body('priority').optional().isIn(['Low', 'Medium', 'High', 'Urgent']),
+    body('subtasks').optional().isArray(),
+    body('subtasks.*.title').optional().trim().notEmpty(),
+    body('subtasks.*.completed').optional().isBoolean(),
   ],
   async (req, res) => {
     try {
@@ -67,6 +70,9 @@ router.put(
     body('priority').optional().isIn(['Low', 'Medium', 'High', 'Urgent']),
     body('assignedTo').optional(),
     body('order').optional().isNumeric(),
+    body('subtasks').optional().isArray(),
+    body('subtasks.*.title').optional().trim().notEmpty(),
+    body('subtasks.*.completed').optional().isBoolean(),
   ],
   async (req, res) => {
     try {

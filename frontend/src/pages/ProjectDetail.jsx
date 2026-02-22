@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Button, Modal, Form, Alert, Spinner } from 'react-bootstrap';
+import { Button, Modal, Form, Alert, Spinner, InputGroup } from 'react-bootstrap';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../utils/api';
 import KanbanBoard from '../components/KanbanBoard';
@@ -12,7 +12,8 @@ export default function ProjectDetail() {
   const [error, setError] = useState('');
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [taskForm, setTaskForm] = useState({ title: '', description: '', assignedTo: '', priority: 'Medium' });
+  const [taskForm, setTaskForm] = useState({ title: '', description: '', assignedTo: '', priority: 'Medium', subtasks: [] });
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [projectForm, setProjectForm] = useState({});
   const [users, setUsers] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -67,8 +68,10 @@ export default function ProjectDetail() {
         ...taskForm,
         project: id,
         assignedTo: taskForm.assignedTo || undefined,
+        subtasks: taskForm.subtasks || [],
       });
-      setTaskForm({ title: '', description: '', assignedTo: '', priority: 'Medium' });
+      setTaskForm({ title: '', description: '', assignedTo: '', priority: 'Medium', subtasks: [] });
+      setNewSubtaskTitle('');
       setShowTaskModal(false);
       fetchTasks();
     } catch (err) {
@@ -87,7 +90,8 @@ export default function ProjectDetail() {
     }
   };
 
-  const handleDeleteTask = async (taskId) => {
+  const handleDeleteTask = async (task) => {
+    const taskId = typeof task === 'object' ? task._id : task;
     if (!confirm('Delete this task?')) return;
     try {
       await api.delete(`/tasks/${taskId}`);
@@ -157,13 +161,14 @@ export default function ProjectDetail() {
         isCreator={true}
         onStatusChange={(task, status) => handleUpdateTask(task._id, { status })}
         onPriorityChange={(task, priority) => handleUpdateTask(task._id, { priority })}
+        onSubtasksChange={(task, subtasks) => handleUpdateTask(task._id, { subtasks })}
         onAssigneeChange={(task, assignedTo) => handleUpdateTask(task._id, { assignedTo: assignedTo || null })}
         onDelete={handleDeleteTask}
         users={users}
       />
 
       {/* New Task Modal */}
-      <Modal show={showTaskModal} onHide={() => setShowTaskModal(false)}>
+      <Modal show={showTaskModal} onHide={() => { setShowTaskModal(false); setTaskForm({ title: '', description: '', assignedTo: '', priority: 'Medium', subtasks: [] }); setNewSubtaskTitle(''); }}>
         <Modal.Header closeButton>
           <Modal.Title>New Task</Modal.Title>
         </Modal.Header>
@@ -212,6 +217,69 @@ export default function ProjectDetail() {
                   <option key={u._id} value={u._id}>{u.name}</option>
                 ))}
               </Form.Select>
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Subtasks</Form.Label>
+              {(taskForm.subtasks || []).map((st, i) => (
+                <div key={i} className="d-flex align-items-center gap-1 mb-1">
+                  <Form.Control
+                    size="sm"
+                    value={st.title}
+                    onChange={(e) => {
+                      const next = [...(taskForm.subtasks || [])];
+                      next[i] = { ...next[i], title: e.target.value };
+                      setTaskForm({ ...taskForm, subtasks: next });
+                    }}
+                    placeholder="Subtask title"
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-danger"
+                    onClick={() => setTaskForm({
+                      ...taskForm,
+                      subtasks: (taskForm.subtasks || []).filter((_, idx) => idx !== i),
+                    })}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <InputGroup size="sm">
+                <Form.Control
+                  placeholder="Add subtask..."
+                  value={newSubtaskTitle}
+                  onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const title = newSubtaskTitle.trim();
+                      if (title) {
+                        setTaskForm({
+                          ...taskForm,
+                          subtasks: [...(taskForm.subtasks || []), { title, completed: false }],
+                        });
+                        setNewSubtaskTitle('');
+                      }
+                    }
+                  }}
+                />
+                <Button
+                  variant="outline-primary"
+                  size="sm"
+                  onClick={() => {
+                    const title = newSubtaskTitle.trim();
+                    if (title) {
+                      setTaskForm({
+                        ...taskForm,
+                        subtasks: [...(taskForm.subtasks || []), { title, completed: false }],
+                      });
+                      setNewSubtaskTitle('');
+                    }
+                  }}
+                >
+                  +
+                </Button>
+              </InputGroup>
             </Form.Group>
           </Modal.Body>
           <Modal.Footer>
