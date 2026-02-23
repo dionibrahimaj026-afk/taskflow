@@ -8,13 +8,21 @@ import { logActivity } from '../utils/logActivity.js';
 const router = express.Router();
 router.use(optionalAuth);
 
+const PRIORITY_ORDER = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
+
 // Get all tasks for a project
 router.get('/project/:projectId', async (req, res) => {
   try {
-    const tasks = await Task.find({ project: req.params.projectId })
+    let tasks = await Task.find({ project: req.params.projectId })
       .populate('assignedTo', 'name avatar email')
       .populate('comments.user', 'name avatar')
       .sort({ order: 1, createdAt: 1 });
+    tasks = tasks.sort((a, b) => {
+      const pa = PRIORITY_ORDER[a.priority] ?? 2;
+      const pb = PRIORITY_ORDER[b.priority] ?? 2;
+      if (pa !== pb) return pa - pb;
+      return (a.order ?? 0) - (b.order ?? 0);
+    });
     res.json(tasks);
   } catch (err) {
     res.status(500).json({ message: err.message });

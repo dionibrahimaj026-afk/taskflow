@@ -15,6 +15,9 @@ const PRIORITIES = [
   { key: "Urgent", label: "Urgent", variant: "danger" },
 ];
 
+const PRIORITY_ORDER = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
+const sortByPriority = (a, b) => (PRIORITY_ORDER[a.priority] ?? 2) - (PRIORITY_ORDER[b.priority] ?? 2);
+
 export default function KanbanBoard({
   tasks,
   isCreator = false,
@@ -29,7 +32,9 @@ export default function KanbanBoard({
   const [newSubtask, setNewSubtask] = useState({});
 
   const tasksByStatus = COLUMNS.reduce((acc, col) => {
-    acc[col.key] = tasks.filter((t) => t.status === col.key);
+    acc[col.key] = tasks
+      .filter((t) => t.status === col.key)
+      .sort(sortByPriority);
     return acc;
   }, {});
 
