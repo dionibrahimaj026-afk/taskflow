@@ -23,6 +23,7 @@ export default function KanbanBoard({
   onSubtasksChange,
   onAssigneeChange,
   onDelete,
+  onTaskClick,
   users = [],
 }) {
   const [newSubtask, setNewSubtask] = useState({});
@@ -77,7 +78,7 @@ export default function KanbanBoard({
                 >
                   <Card.Body className="py-2">
                     <div className="d-flex justify-content-between align-items-start">
-                      <div>
+                      <div className="flex-grow-1">
                         <strong>{task.title}</strong>
                         <Badge
                           bg={PRIORITIES.find((p) => p.key === (task.priority || "Medium"))?.variant || "secondary"}
@@ -85,15 +86,32 @@ export default function KanbanBoard({
                         >
                           {task.priority || "Medium"}
                         </Badge>
+                        {task.comments?.length > 0 && (
+                          <span className="ms-1 text-muted small" title={`${task.comments.length} comment(s)`}>
+                            💬 {task.comments.length}
+                          </span>
+                        )}
                       </div>
-                      {isCreator && (
+                      <div className="d-flex align-items-center gap-1">
+                        {onTaskClick && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-link text-secondary p-0"
+                            onClick={(e) => { e.stopPropagation(); onTaskClick(task); }}
+                            title="View details & comments"
+                          >
+                            💬
+                          </button>
+                        )}
+                        {isCreator && (
                         <button
                           className="btn btn-sm btn-link text-danger p-0"
                           onClick={() => onDelete(task)}
                         >
                           ×
                         </button>
-                      )}
+                        )}
+                      </div>
                     </div>
                     <p className="small text-muted mb-1 mt-1">
                       {task.description || 'No description'}

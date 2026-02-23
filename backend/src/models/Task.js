@@ -5,6 +5,12 @@ const subtaskSchema = new mongoose.Schema({
   completed: { type: Boolean, default: false },
 }, { _id: true });
 
+const commentSchema = new mongoose.Schema({
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  text: { type: String, required: true, trim: true },
+  createdAt: { type: Date, default: Date.now },
+}, { _id: true });
+
 const taskSchema = new mongoose.Schema({
   title: {
     type: String,
@@ -42,6 +48,10 @@ const taskSchema = new mongoose.Schema({
   },
   subtasks: {
     type: [subtaskSchema],
+    default: [],
+  },
+  comments: {
+    type: [commentSchema],
     default: [],
   },
 }, { timestamps: true });

@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import KanbanBoard from '../components/KanbanBoard';
+import TaskDetailModal from '../components/TaskDetailModal';
 import ActivityLog from '../components/ActivityLog';
 
 export default function ProjectDetail() {
@@ -20,6 +21,7 @@ export default function ProjectDetail() {
   const [users, setUsers] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [activityRefresh, setActivityRefresh] = useState(0);
+  const [selectedTask, setSelectedTask] = useState(null);
 
   const fetchProject = async () => {
     try {
@@ -189,6 +191,7 @@ export default function ProjectDetail() {
             onSubtasksChange={(task, subtasks) => handleUpdateTask(task._id, { subtasks })}
             onAssigneeChange={(task, assignedTo) => handleUpdateTask(task._id, { assignedTo: assignedTo || null })}
             onDelete={handleDeleteTask}
+            onTaskClick={setSelectedTask}
             users={users}
           />
         </div>
@@ -196,6 +199,17 @@ export default function ProjectDetail() {
           <ActivityLog projectId={id} refreshKey={activityRefresh} />
         </div>
       </div>
+
+      <TaskDetailModal
+        task={selectedTask}
+        show={!!selectedTask}
+        onHide={() => setSelectedTask(null)}
+        onCommentAdded={(updatedTask) => {
+          setSelectedTask(updatedTask);
+          fetchTasks();
+          setActivityRefresh((k) => k + 1);
+        }}
+      />
 
       {/* New Task Modal */}
       <Modal show={showTaskModal} onHide={() => { setShowTaskModal(false); setTaskForm({ title: '', description: '', assignedTo: '', priority: 'Medium', subtasks: [] }); setNewSubtaskTitle(''); }}>
