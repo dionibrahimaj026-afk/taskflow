@@ -1,10 +1,12 @@
 import { Outlet } from 'react-router-dom';
-import { Navbar, Nav, Container } from 'react-bootstrap';
+import { Navbar, Nav, Container, Button } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -30,6 +32,15 @@ export default function Layout() {
               </Nav.Link>
             </Nav>
             <Nav>
+              <Button
+                variant="outline-light"
+                size="sm"
+                className="me-2"
+                onClick={toggleTheme}
+                title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+              >
+                {theme === 'light' ? '🌙' : '☀️'}
+              </Button>
               {user ? (
                 <>
                   <Navbar.Text className="me-3">
