@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 
 import Layout from './components/Layout';
+import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import AuthCallback from './pages/AuthCallback';
@@ -19,7 +20,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
-          <Route path="/" element={<Layout />}>
+          <Route path="/" element={<ErrorBoundary><Layout /></ErrorBoundary>}>
             <Route index element={<Dashboard />} />
             <Route path="project/:id" element={<ProjectDetail />} />
             <Route path="profile" element={<Profile />} />

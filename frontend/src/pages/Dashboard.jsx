@@ -12,6 +12,7 @@ import {
 import { Link } from "react-router-dom";
 import { api } from "../utils/api";
 import { useAuth } from "../context/AuthContext";
+import { formatDate, parseDate } from "../utils/dateUtils";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -104,9 +105,9 @@ export default function Dashboard() {
                 <Card.Text className="text-muted small">
                   {p.description || "No description"}
                 </Card.Text>
-                {p.dueDate && (
+                {parseDate(p.dueDate) && (
                   <Card.Text className="small">
-                    Due: {new Date(p.dueDate).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
+                    Due: {formatDate(p.dueDate, { dateStyle: "short", timeStyle: "short" })}
                   </Card.Text>
                 )}
                 <div className="mt-3 d-flex gap-2">

@@ -3,6 +3,7 @@ import { Button, Modal, Form, Alert, Spinner, InputGroup } from 'react-bootstrap
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
+import { toDateTimeLocal, formatDate, parseDate } from '../utils/dateUtils';
 import KanbanBoard from '../components/KanbanBoard';
 import TaskDetailModal from '../components/TaskDetailModal';
 import ActivityLog from '../components/ActivityLog';
@@ -27,12 +28,13 @@ export default function ProjectDetail() {
     try {
       const data = await api.get(`/projects/${id}`);
       setProject(data);
-      const dueVal = data.dueDate
-        ? new Date(data.dueDate).toISOString().slice(0, 16)
-        : '';
-      setProjectForm({ title: data.title, description: data.description, dueDate: dueVal });
+      setProjectForm({
+        title: data?.title ?? '',
+        description: data?.description ?? '',
+        dueDate: toDateTimeLocal(data?.dueDate),
+      });
     } catch (err) {
-      setError(err.message || 'Failed to load project');
+      setError(err?.message || 'Failed to load project');
     }
   };
 
@@ -165,15 +167,16 @@ export default function ProjectDetail() {
       {project.description && (
         <p className="text-muted mb-4">{project.description}</p>
       )}
-      {project.dueDate && (
-        <p className="mb-4">
-          <strong>Due:</strong>{' '}
-          {new Date(project.dueDate).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
-          {new Date(project.dueDate) < new Date() && (
-            <span className="text-danger ms-2">(overdue)</span>
-          )}
-        </p>
-      )}
+      {(() => {
+        const due = parseDate(project.dueDate);
+        if (!due) return null;
+        return (
+          <p className="mb-4">
+            <strong>Due:</strong> {formatDate(project.dueDate, { dateStyle: 'medium', timeStyle: 'short' })}
+            {due < new Date() && <span className="text-danger ms-2">(overdue)</span>}
+          </p>
+        );
+      })()}
 
       {error && (
         <Alert variant="danger" dismissible onClose={() => setError('')}>

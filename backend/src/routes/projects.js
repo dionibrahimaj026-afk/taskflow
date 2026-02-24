@@ -48,6 +48,10 @@ router.post(
       if (!req.user) return res.status(401).json({ message: 'Please log in to create a project' });
 
       const payload = { ...req.body, createdBy: req.user._id };
+      if (payload.dueDate) {
+        const d = new Date(payload.dueDate);
+        payload.dueDate = Number.isNaN(d.getTime()) ? null : d;
+      }
       const project = await Project.create(payload);
       await project.populate('createdBy', 'name avatar');
       await logActivity({
@@ -84,8 +88,12 @@ router.put(
       }
 
       const updates = { ...req.body };
-      if (req.body.dueDate === '' || req.body.dueDate === null) updates.dueDate = null;
-      else if (req.body.dueDate) updates.dueDate = new Date(req.body.dueDate);
+      if (req.body.dueDate === '' || req.body.dueDate === null) {
+        updates.dueDate = null;
+      } else if (req.body.dueDate) {
+        const d = new Date(req.body.dueDate);
+        updates.dueDate = Number.isNaN(d.getTime()) ? null : d;
+      }
 
       const project = await Project.findByIdAndUpdate(
         req.params.id,
