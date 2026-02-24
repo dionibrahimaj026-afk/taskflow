@@ -10,6 +10,7 @@ import ActivityLog from '../components/ActivityLog';
 
 export default function ProjectDetail() {
   const { id } = useParams();
+  const { user } = useAuth();
   const [project, setProject] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);

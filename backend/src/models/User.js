@@ -23,21 +23,12 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
-  githubId: {
-    type: String,
-    unique: true,
-    sparse: true,
-  },
   role: {
     type: String,
     enum: ['user', 'admin'],
     default: 'user',
   },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-});
+}, { timestamps: true });
 
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password') || !this.password) return next();
