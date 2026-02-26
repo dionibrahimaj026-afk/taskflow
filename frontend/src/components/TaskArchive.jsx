@@ -8,13 +8,15 @@ const PRIORITIES = [
   { key: 'Urgent', label: 'Urgent', variant: 'danger' },
 ];
 
-export default function TaskArchive({ tasks, onRestore, onTaskClick }) {
+export default function TaskArchive({ tasks, onRestore, onTaskClick, searchQuery }) {
   if (tasks.length === 0) {
     return (
       <Card className="mb-4">
         <Card.Header>Archive</Card.Header>
         <Card.Body className="text-muted text-center py-4">
-          No archived tasks. Archive completed tasks from the Done column to keep your board tidy.
+          {searchQuery
+            ? 'No archived tasks match your search.'
+            : 'No archived tasks. Archive completed tasks from the Done column to keep your board tidy.'}
         </Card.Body>
       </Card>
     );

@@ -27,6 +27,7 @@ export default function ProjectDetail() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [showArchive, setShowArchive] = useState(false);
   const [archivedTasks, setArchivedTasks] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchProject = async () => {
     try {
@@ -181,6 +182,23 @@ export default function ProjectDetail() {
 
   const isCreator = project.createdBy && user && String(project.createdBy?._id ?? project.createdBy) === String(user.id);
 
+  const filterTasks = (list, q) => {
+    if (!q?.trim()) return list;
+    const lower = q.trim().toLowerCase();
+    return list.filter((t) => {
+      const matchTitle = t.title?.toLowerCase().includes(lower);
+      const matchDesc = t.description?.toLowerCase().includes(lower);
+      const matchAssignee = t.assignedTo?.name?.toLowerCase().includes(lower);
+      const matchStatus = t.status?.toLowerCase().includes(lower);
+      const matchPriority = t.priority?.toLowerCase().includes(lower);
+      const matchSubtask = (t.subtasks || []).some((s) => s.title?.toLowerCase().includes(lower));
+      return matchTitle || matchDesc || matchAssignee || matchStatus || matchPriority || matchSubtask;
+    });
+  };
+
+  const filteredTasks = filterTasks(tasks, searchQuery);
+  const filteredArchived = filterTasks(archivedTasks, searchQuery);
+
   return (
     <>
       <div className="d-flex justify-content-between align-items-center mb-3">
@@ -229,17 +247,38 @@ export default function ProjectDetail() {
         </Alert>
       )}
 
+      <Form.Group className="mb-3">
+        <InputGroup>
+          <InputGroup.Text>🔍</InputGroup.Text>
+          <Form.Control
+            type="search"
+            placeholder="Search tasks by title, description, assignee..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <Button variant="outline-secondary" onClick={() => setSearchQuery('')}>
+              Clear
+            </Button>
+          )}
+        </InputGroup>
+      </Form.Group>
+
       <div className="row">
         <div className="col-lg-8">
+          {searchQuery && filteredTasks.length === 0 && !showArchive && (
+            <Alert variant="info">No tasks match your search. Try different keywords.</Alert>
+          )}
           {showArchive ? (
             <TaskArchive
-              tasks={archivedTasks}
+              tasks={filteredArchived}
               onRestore={handleRestoreTask}
               onTaskClick={setSelectedTask}
+              searchQuery={searchQuery}
             />
           ) : (
             <KanbanBoard
-              tasks={tasks}
+              tasks={filteredTasks}
               isCreator={true}
               onStatusChange={(task, status) => handleUpdateTask(task._id, { status })}
               onPriorityChange={(task, priority) => handleUpdateTask(task._id, { priority })}
