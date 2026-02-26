@@ -1,6 +1,32 @@
 import { useState } from "react";
 import { Row, Col, Card, Badge, Form, InputGroup } from "react-bootstrap";
 
+const StatusIcon = ({ name, size = 18 }) => {
+  const icons = {
+    Todo: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className="me-1">
+        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v2H7zm0 4h2v2H7zm4-4h6v2h-6zm0 4h6v2h-6z" />
+      </svg>
+    ),
+    Active: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className="me-1">
+        <path d="M8 5v14l11-7z" />
+      </svg>
+    ),
+    Testing: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className="me-1">
+        <path d="M19.8 18.4L14 10.67V6.5l1.35-1.69c.26-.33.03-.81-.39-.81H9.04c-.42 0-.65.48-.39.81L10 6.5v4.17L4.2 18.4c-.49.66-.02 1.6.8 1.6h14c.82 0 1.29-.94.8-1.6z" />
+      </svg>
+    ),
+    Done: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className="me-1">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+      </svg>
+    ),
+  };
+  return icons[name] || null;
+};
+
 const COLUMNS = [
   { key: "Todo", label: "Todo", variant: "secondary" },
   { key: "Active", label: "Active", variant: "primary" },
@@ -45,7 +71,10 @@ export default function KanbanBoard({
         <Col key={col.key} md={6} lg={3}>
           <Card className="mb-3">
             <Card.Header className="d-flex justify-content-between align-items-center">
-              <Badge bg={col.variant}>{col.label}</Badge>
+              <Badge bg={col.variant} className="d-flex align-items-center gap-1">
+                <StatusIcon name={col.key} />
+                {col.label}
+              </Badge>
               <span className="text-muted small">
                 {tasksByStatus[col.key]?.length || 0}
               </span>
