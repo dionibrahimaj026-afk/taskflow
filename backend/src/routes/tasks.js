@@ -13,7 +13,11 @@ const PRIORITY_ORDER = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
 // Get all tasks for a project (excludes archived)
 router.get('/project/:projectId', async (req, res) => {
   try {
-    let tasks = await Task.find({ project: req.params.projectId, archived: { $ne: true } })
+    let tasks = await Task.find({
+      project: req.params.projectId,
+      archived: { $ne: true },
+      deletedAt: null,
+    })
       .populate('assignedTo', 'name avatar email')
       .populate('comments.user', 'name avatar')
       .sort({ order: 1, createdAt: 1 });
@@ -32,7 +36,11 @@ router.get('/project/:projectId', async (req, res) => {
 // Get archived tasks for a project
 router.get('/project/:projectId/archive', async (req, res) => {
   try {
-    let tasks = await Task.find({ project: req.params.projectId, archived: true })
+    let tasks = await Task.find({
+      project: req.params.projectId,
+      archived: true,
+      deletedAt: null,
+    })
       .populate('assignedTo', 'name avatar email')
       .populate('comments.user', 'name avatar')
       .sort({ archivedAt: -1 });
@@ -42,6 +50,22 @@ router.get('/project/:projectId/archive', async (req, res) => {
       if (pa !== pb) return pa - pb;
       return new Date(b.archivedAt) - new Date(a.archivedAt);
     });
+    res.json(tasks);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get trashed (soft-deleted) tasks for a project
+router.get('/project/:projectId/trash', async (req, res) => {
+  try {
+    const tasks = await Task.find({
+      project: req.params.projectId,
+      deletedAt: { $ne: null },
+    })
+      .populate('assignedTo', 'name avatar email')
+      .populate('comments.user', 'name avatar')
+      .sort({ deletedAt: -1 });
     res.json(tasks);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -215,8 +239,58 @@ router.post(
   }
 );
 
-// Delete task
+// Soft delete task (move to trash)
 router.delete('/:id', async (req, res) => {
+  try {
+    const task = await Task.findByIdAndUpdate(
+      req.params.id,
+      { $set: { deletedAt: new Date() } },
+      { new: true }
+    );
+    if (!task) return res.status(404).json({ message: 'Task not found' });
+    await logActivity({
+      project: task.project,
+      user: req.user,
+      action: 'task.deleted',
+      entityType: 'task',
+      entityId: task._id,
+      entityTitle: task.title,
+      details: 'Task moved to trash',
+    });
+    res.json({ message: 'Task moved to trash' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Restore task from trash
+router.post('/:id/restore', async (req, res) => {
+  try {
+    const task = await Task.findByIdAndUpdate(
+      req.params.id,
+      { $set: { deletedAt: null } },
+      { new: true }
+    )
+      .populate('assignedTo', 'name avatar email')
+      .populate('comments.user', 'name avatar');
+    if (!task) return res.status(404).json({ message: 'Task not found' });
+    await logActivity({
+      project: task.project,
+      user: req.user,
+      action: 'task.restored',
+      entityType: 'task',
+      entityId: task._id,
+      entityTitle: task.title,
+      details: 'Restored from trash',
+    });
+    res.json(task);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Permanently delete task
+router.delete('/:id/permanent', async (req, res) => {
   try {
     const task = await Task.findByIdAndDelete(req.params.id);
     if (!task) return res.status(404).json({ message: 'Task not found' });
@@ -227,9 +301,9 @@ router.delete('/:id', async (req, res) => {
       entityType: 'task',
       entityId: task._id,
       entityTitle: task.title,
-      details: 'Task deleted',
+      details: 'Permanently deleted',
     });
-    res.json({ message: 'Task deleted' });
+    res.json({ message: 'Task permanently deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

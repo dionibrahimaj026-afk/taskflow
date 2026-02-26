@@ -26,7 +26,9 @@ export default function ProjectDetail() {
   const [activityRefresh, setActivityRefresh] = useState(0);
   const [selectedTask, setSelectedTask] = useState(null);
   const [showArchive, setShowArchive] = useState(false);
+  const [showTrash, setShowTrash] = useState(false);
   const [archivedTasks, setArchivedTasks] = useState([]);
+  const [trashedTasks, setTrashedTasks] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
 
   const fetchProject = async () => {
@@ -61,6 +63,15 @@ export default function ProjectDetail() {
     }
   };
 
+  const fetchTrashedTasks = async () => {
+    try {
+      const data = await api.get(`/tasks/project/${id}/trash`);
+      setTrashedTasks(data);
+    } catch (err) {
+      setTrashedTasks([]);
+    }
+  };
+
   const fetchUsers = async () => {
     try {
       const data = await api.get('/users/list');
@@ -73,7 +84,7 @@ export default function ProjectDetail() {
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      await Promise.all([fetchProject(), fetchTasks(), fetchArchivedTasks()]);
+      await Promise.all([fetchProject(), fetchTasks(), fetchArchivedTasks(), fetchTrashedTasks()]);
       setLoading(false);
     };
     load();
@@ -99,6 +110,7 @@ export default function ProjectDetail() {
       setShowTaskModal(false);
       fetchTasks();
       fetchArchivedTasks();
+      fetchTrashedTasks();
       setActivityRefresh((k) => k + 1);
     } catch (err) {
       setError(err.message || 'Failed to create task');
@@ -112,6 +124,7 @@ export default function ProjectDetail() {
       await api.put(`/tasks/${taskId}`, updates);
       fetchTasks();
       fetchArchivedTasks();
+      fetchTrashedTasks();
       setActivityRefresh((k) => k + 1);
     } catch (err) {
       setError(err.message || 'Failed to update task');
@@ -123,6 +136,7 @@ export default function ProjectDetail() {
       await api.put(`/tasks/${task._id}`, { archived: true });
       fetchTasks();
       fetchArchivedTasks();
+      fetchTrashedTasks();
       setActivityRefresh((k) => k + 1);
     } catch (err) {
       setError(err.message || 'Failed to archive task');
@@ -134,6 +148,7 @@ export default function ProjectDetail() {
       await api.put(`/tasks/${task._id}`, { archived: false });
       fetchTasks();
       fetchArchivedTasks();
+      fetchTrashedTasks();
       setActivityRefresh((k) => k + 1);
     } catch (err) {
       setError(err.message || 'Failed to restore task');
@@ -147,9 +162,33 @@ export default function ProjectDetail() {
       await api.delete(`/tasks/${taskId}`);
       fetchTasks();
       fetchArchivedTasks();
+      fetchTrashedTasks();
       setActivityRefresh((k) => k + 1);
     } catch (err) {
       setError(err.message || 'Failed to delete');
+    }
+  };
+
+  const handleRestoreFromTrash = async (task) => {
+    try {
+      await api.post(`/tasks/${task._id}/restore`);
+      fetchTasks();
+      fetchArchivedTasks();
+      fetchTrashedTasks();
+      setActivityRefresh((k) => k + 1);
+    } catch (err) {
+      setError(err.message || 'Failed to restore task');
+    }
+  };
+
+  const handlePermanentDelete = async (task) => {
+    if (!confirm('Permanently delete this task? This cannot be undone.')) return;
+    try {
+      await api.delete(`/tasks/${task._id}/permanent`);
+      fetchTrashedTasks();
+      setActivityRefresh((k) => k + 1);
+    } catch (err) {
+      setError(err.message || 'Failed to delete task');
     }
   };
 
@@ -198,6 +237,8 @@ export default function ProjectDetail() {
 
   const filteredTasks = filterTasks(tasks, searchQuery);
   const filteredArchived = filterTasks(archivedTasks, searchQuery);
+  const filteredTrash = filterTasks(trashedTasks, searchQuery);
+
 
   return (
     <>
@@ -220,9 +261,16 @@ export default function ProjectDetail() {
           <Button
             variant={showArchive ? 'secondary' : 'outline-secondary'}
             className="ms-2"
-            onClick={() => setShowArchive(!showArchive)}
+            onClick={() => { setShowArchive(!showArchive); setShowTrash(false); }}
           >
             {showArchive ? 'Board' : `Archive (${archivedTasks.length})`}
+          </Button>
+          <Button
+            variant={showTrash ? 'secondary' : 'outline-secondary'}
+            className="ms-2"
+            onClick={() => { setShowTrash(!showTrash); setShowArchive(false); }}
+          >
+            {showTrash ? 'Board' : `Trash (${trashedTasks.length})`}
           </Button>
         </div>
       </div>
@@ -266,10 +314,18 @@ export default function ProjectDetail() {
 
       <div className="row">
         <div className="col-lg-8">
-          {searchQuery && filteredTasks.length === 0 && !showArchive && (
+          {searchQuery && filteredTasks.length === 0 && !showArchive && !showTrash && (
             <Alert variant="info">No tasks match your search. Try different keywords.</Alert>
           )}
-          {showArchive ? (
+          {showTrash ? (
+            <TaskTrash
+              tasks={filteredTrash}
+              onRestore={handleRestoreFromTrash}
+              onPermanentDelete={handlePermanentDelete}
+              onTaskClick={setSelectedTask}
+              searchQuery={searchQuery}
+            />
+          ) : showArchive ? (
             <TaskArchive
               tasks={filteredArchived}
               onRestore={handleRestoreTask}

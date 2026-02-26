@@ -22,6 +22,18 @@ const projectSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  deletedAt: {
+    type: Date,
+    default: null,
+  },
+  archived: {
+    type: Boolean,
+    default: false,
+  },
+  archivedAt: {
+    type: Date,
+    default: null,
+  },
 }, { timestamps: true });
 
 projectSchema.pre('save', function (next) {

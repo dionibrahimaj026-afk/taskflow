@@ -8,11 +8,12 @@ import { logActivity } from '../utils/logActivity.js';
 const router = express.Router();
 router.use(optionalAuth);
 
-// Get all projects
+// Get all projects (excludes deleted and archived)
 router.get('/', async (req, res) => {
   try {
-    const projects = await Project.find()
+    const projects = await Project.find({ deletedAt: null, archived: { $ne: true } })
       .populate('createdBy', 'name avatar')
+      .populate('members', 'name avatar')
       .sort({ updatedAt: -1 });
     res.json(projects);
   } catch (err) {
@@ -20,7 +21,33 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get single project
+// Get archived projects
+router.get('/archive', async (req, res) => {
+  try {
+    const projects = await Project.find({ archived: true, deletedAt: null })
+      .populate('createdBy', 'name avatar')
+      .populate('members', 'name avatar')
+      .sort({ archivedAt: -1 });
+    res.json(projects);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get trashed (soft-deleted) projects
+router.get('/trash', async (req, res) => {
+  try {
+    const projects = await Project.find({ deletedAt: { $ne: null } })
+      .populate('createdBy', 'name avatar')
+      .populate('members', 'name avatar')
+      .sort({ deletedAt: -1 });
+    res.json(projects);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get single project (include deleted for viewing in trash)
 router.get('/:id', async (req, res) => {
   try {
     const project = await Project.findById(req.params.id)
@@ -78,12 +105,15 @@ router.put(
     body('description').optional(),
     body('members').optional().isArray(),
     body('dueDate').optional(),
+    body('archived').optional().isBoolean(),
   ],
   async (req, res) => {
     try {
       const existing = await Project.findById(req.params.id);
       if (!existing) return res.status(404).json({ message: 'Project not found' });
-      if (existing.createdBy && (!req.user || String(req.user._id) !== String(existing.createdBy))) {
+      const isCreator = existing.createdBy && req.user && String(req.user._id) === String(existing.createdBy);
+      const isArchiveOnly = Object.keys(req.body).length === 1 && 'archived' in req.body && req.body.archived === true;
+      if (!isCreator && !isArchiveOnly) {
         return res.status(403).json({ message: 'Only the project creator can edit this project' });
       }
 
@@ -94,6 +124,9 @@ router.put(
         const d = new Date(req.body.dueDate);
         updates.dueDate = Number.isNaN(d.getTime()) ? null : d;
       }
+      if ('archived' in req.body) {
+        updates.archivedAt = req.body.archived ? new Date() : null;
+      }
 
       const project = await Project.findByIdAndUpdate(
         req.params.id,
@@ -103,6 +136,12 @@ router.put(
         .populate('createdBy', 'name avatar')
         .populate('members', 'name avatar');
       if (!project) return res.status(404).json({ message: 'Project not found' });
+      const details =
+        'archived' in req.body
+          ? req.body.archived
+            ? 'Project archived'
+            : 'Restored from archive'
+          : 'Project updated';
       await logActivity({
         project: project._id,
         user: req.user,
@@ -110,7 +149,7 @@ router.put(
         entityType: 'project',
         entityId: project._id,
         entityTitle: project.title,
-        details: 'Project updated',
+        details,
       });
       res.json(project);
     } catch (err) {
@@ -119,16 +158,23 @@ router.put(
   }
 );
 
-// Delete project - only creator can delete
+// Soft delete project (move to trash) - creator or members
 router.delete('/:id', async (req, res) => {
   try {
     const existing = await Project.findById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Project not found' });
-    if (existing.createdBy && (!req.user || String(req.user._id) !== String(existing.createdBy))) {
-      return res.status(403).json({ message: 'Only the project creator can delete this project' });
+    if (!req.user) return res.status(401).json({ message: 'Please log in to delete a project' });
+    const isCreator = existing.createdBy && String(req.user._id) === String(existing.createdBy);
+    const isMember = existing.members?.some((m) => String(m._id || m) === String(req.user._id));
+    if (!isCreator && !isMember) {
+      return res.status(403).json({ message: 'Only the project creator or members can delete this project' });
     }
 
-    const project = await Project.findByIdAndDelete(req.params.id);
+    const project = await Project.findByIdAndUpdate(
+      req.params.id,
+      { $set: { deletedAt: new Date() } },
+      { new: true }
+    );
     if (!project) return res.status(404).json({ message: 'Project not found' });
     await logActivity({
       project: project._id,
@@ -137,10 +183,74 @@ router.delete('/:id', async (req, res) => {
       entityType: 'project',
       entityId: project._id,
       entityTitle: project.title,
-      details: 'Project deleted',
+      details: 'Project moved to trash',
     });
+    res.json({ message: 'Project moved to trash' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Restore project from trash - creator or members
+router.post('/:id/restore', async (req, res) => {
+  try {
+    const existing = await Project.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Project not found' });
+    if (!req.user) return res.status(401).json({ message: 'Please log in to restore a project' });
+    const isCreator = existing.createdBy && String(req.user._id) === String(existing.createdBy);
+    const isMember = existing.members?.some((m) => String(m._id || m) === String(req.user._id));
+    if (!isCreator && !isMember) {
+      return res.status(403).json({ message: 'Only the project creator or members can restore this project' });
+    }
+
+    const project = await Project.findByIdAndUpdate(
+      req.params.id,
+      { $set: { deletedAt: null } },
+      { new: true }
+    )
+      .populate('createdBy', 'name avatar')
+      .populate('members', 'name avatar');
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+    await logActivity({
+      project: project._id,
+      user: req.user,
+      action: 'project.updated',
+      entityType: 'project',
+      entityId: project._id,
+      entityTitle: project.title,
+      details: 'Restored from trash',
+    });
+    res.json(project);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Permanently delete project - creator or members
+router.delete('/:id/permanent', async (req, res) => {
+  try {
+    const existing = await Project.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Project not found' });
+    if (!req.user) return res.status(401).json({ message: 'Please log in to permanently delete a project' });
+    const isCreator = existing.createdBy && String(req.user._id) === String(existing.createdBy);
+    const isMember = existing.members?.some((m) => String(m._id || m) === String(req.user._id));
+    if (!isCreator && !isMember) {
+      return res.status(403).json({ message: 'Only the project creator or members can permanently delete this project' });
+    }
+
+    const project = await Project.findByIdAndDelete(req.params.id);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
     await Task.deleteMany({ project: req.params.id });
-    res.json({ message: 'Project deleted' });
+    await logActivity({
+      project: project._id,
+      user: req.user,
+      action: 'project.deleted',
+      entityType: 'project',
+      entityId: project._id,
+      entityTitle: project.title,
+      details: 'Permanently deleted',
+    });
+    res.json({ message: 'Project permanently deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

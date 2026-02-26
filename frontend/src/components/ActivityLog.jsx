@@ -82,7 +82,7 @@ export default function ActivityLog({ projectId, refreshKey = 0 }) {
                   {a.entityType === 'task' && a.entityTitle && (
                     <span className="text-muted"> "{a.entityTitle}"</span>
                   )}
-                  {a.details && a.action === 'task.updated' && (
+                  {a.details && (
                     <span className="text-muted"> — {a.details}</span>
                   )}
                 </div>
