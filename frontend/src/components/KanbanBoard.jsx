@@ -27,6 +27,7 @@ export default function KanbanBoard({
   onAssigneeChange,
   onDelete,
   onTaskClick,
+  onArchive,
   users = [],
 }) {
   const [newSubtask, setNewSubtask] = useState({});
@@ -106,6 +107,16 @@ export default function KanbanBoard({
                             title="View details & comments"
                           >
                             💬
+                          </button>
+                        )}
+                        {onArchive && task.status === "Done" && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-link text-secondary p-0"
+                            onClick={(e) => { e.stopPropagation(); onArchive(task); }}
+                            title="Archive task"
+                          >
+                            📦
                           </button>
                         )}
                         {isCreator && (

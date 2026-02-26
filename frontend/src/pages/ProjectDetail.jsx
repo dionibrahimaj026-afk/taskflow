@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { toDateTimeLocal, formatDate, parseDate } from '../utils/dateUtils';
 import KanbanBoard from '../components/KanbanBoard';
 import TaskDetailModal from '../components/TaskDetailModal';
+import TaskArchive from '../components/TaskArchive';
 import ActivityLog from '../components/ActivityLog';
 
 export default function ProjectDetail() {
@@ -24,6 +25,8 @@ export default function ProjectDetail() {
   const [submitting, setSubmitting] = useState(false);
   const [activityRefresh, setActivityRefresh] = useState(0);
   const [selectedTask, setSelectedTask] = useState(null);
+  const [showArchive, setShowArchive] = useState(false);
+  const [archivedTasks, setArchivedTasks] = useState([]);
 
   const fetchProject = async () => {
     try {
@@ -48,6 +51,15 @@ export default function ProjectDetail() {
     }
   };
 
+  const fetchArchivedTasks = async () => {
+    try {
+      const data = await api.get(`/tasks/project/${id}/archive`);
+      setArchivedTasks(data);
+    } catch (err) {
+      setArchivedTasks([]);
+    }
+  };
+
   const fetchUsers = async () => {
     try {
       const data = await api.get('/users/list');
@@ -60,7 +72,7 @@ export default function ProjectDetail() {
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      await Promise.all([fetchProject(), fetchTasks()]);
+      await Promise.all([fetchProject(), fetchTasks(), fetchArchivedTasks()]);
       setLoading(false);
     };
     load();
@@ -85,6 +97,7 @@ export default function ProjectDetail() {
       setNewSubtaskTitle('');
       setShowTaskModal(false);
       fetchTasks();
+      fetchArchivedTasks();
       setActivityRefresh((k) => k + 1);
     } catch (err) {
       setError(err.message || 'Failed to create task');
@@ -97,9 +110,32 @@ export default function ProjectDetail() {
     try {
       await api.put(`/tasks/${taskId}`, updates);
       fetchTasks();
+      fetchArchivedTasks();
       setActivityRefresh((k) => k + 1);
     } catch (err) {
       setError(err.message || 'Failed to update task');
+    }
+  };
+
+  const handleArchiveTask = async (task) => {
+    try {
+      await api.put(`/tasks/${task._id}`, { archived: true });
+      fetchTasks();
+      fetchArchivedTasks();
+      setActivityRefresh((k) => k + 1);
+    } catch (err) {
+      setError(err.message || 'Failed to archive task');
+    }
+  };
+
+  const handleRestoreTask = async (task) => {
+    try {
+      await api.put(`/tasks/${task._id}`, { archived: false });
+      fetchTasks();
+      fetchArchivedTasks();
+      setActivityRefresh((k) => k + 1);
+    } catch (err) {
+      setError(err.message || 'Failed to restore task');
     }
   };
 
@@ -109,6 +145,7 @@ export default function ProjectDetail() {
     try {
       await api.delete(`/tasks/${taskId}`);
       fetchTasks();
+      fetchArchivedTasks();
       setActivityRefresh((k) => k + 1);
     } catch (err) {
       setError(err.message || 'Failed to delete');
@@ -162,6 +199,13 @@ export default function ProjectDetail() {
           <Button variant="primary" className="ms-2" onClick={() => setShowTaskModal(true)}>
             New Task
           </Button>
+          <Button
+            variant={showArchive ? 'secondary' : 'outline-secondary'}
+            className="ms-2"
+            onClick={() => setShowArchive(!showArchive)}
+          >
+            {showArchive ? 'Board' : `Archive (${archivedTasks.length})`}
+          </Button>
         </div>
       </div>
 
@@ -187,17 +231,26 @@ export default function ProjectDetail() {
 
       <div className="row">
         <div className="col-lg-8">
-          <KanbanBoard
-            tasks={tasks}
-            isCreator={true}
-            onStatusChange={(task, status) => handleUpdateTask(task._id, { status })}
-            onPriorityChange={(task, priority) => handleUpdateTask(task._id, { priority })}
-            onSubtasksChange={(task, subtasks) => handleUpdateTask(task._id, { subtasks })}
-            onAssigneeChange={(task, assignedTo) => handleUpdateTask(task._id, { assignedTo: assignedTo || null })}
-            onDelete={handleDeleteTask}
-            onTaskClick={setSelectedTask}
-            users={users}
-          />
+          {showArchive ? (
+            <TaskArchive
+              tasks={archivedTasks}
+              onRestore={handleRestoreTask}
+              onTaskClick={setSelectedTask}
+            />
+          ) : (
+            <KanbanBoard
+              tasks={tasks}
+              isCreator={true}
+              onStatusChange={(task, status) => handleUpdateTask(task._id, { status })}
+              onPriorityChange={(task, priority) => handleUpdateTask(task._id, { priority })}
+              onSubtasksChange={(task, subtasks) => handleUpdateTask(task._id, { subtasks })}
+              onAssigneeChange={(task, assignedTo) => handleUpdateTask(task._id, { assignedTo: assignedTo || null })}
+              onDelete={handleDeleteTask}
+              onTaskClick={setSelectedTask}
+              onArchive={handleArchiveTask}
+              users={users}
+            />
+          )}
         </div>
         <div className="col-lg-4">
           <ActivityLog projectId={id} refreshKey={activityRefresh} />

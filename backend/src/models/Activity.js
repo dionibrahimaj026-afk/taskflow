@@ -24,6 +24,8 @@ const activitySchema = new mongoose.Schema(
         'task.updated',
         'task.deleted',
         'task.commented',
+        'task.archived',
+        'task.restored',
       ],
     },
     entityType: {

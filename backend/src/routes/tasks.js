@@ -10,10 +10,10 @@ router.use(optionalAuth);
 
 const PRIORITY_ORDER = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
 
-// Get all tasks for a project
+// Get all tasks for a project (excludes archived)
 router.get('/project/:projectId', async (req, res) => {
   try {
-    let tasks = await Task.find({ project: req.params.projectId })
+    let tasks = await Task.find({ project: req.params.projectId, archived: { $ne: true } })
       .populate('assignedTo', 'name avatar email')
       .populate('comments.user', 'name avatar')
       .sort({ order: 1, createdAt: 1 });
@@ -22,6 +22,25 @@ router.get('/project/:projectId', async (req, res) => {
       const pb = PRIORITY_ORDER[b.priority] ?? 2;
       if (pa !== pb) return pa - pb;
       return (a.order ?? 0) - (b.order ?? 0);
+    });
+    res.json(tasks);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get archived tasks for a project
+router.get('/project/:projectId/archive', async (req, res) => {
+  try {
+    let tasks = await Task.find({ project: req.params.projectId, archived: true })
+      .populate('assignedTo', 'name avatar email')
+      .populate('comments.user', 'name avatar')
+      .sort({ archivedAt: -1 });
+    tasks = tasks.sort((a, b) => {
+      const pa = PRIORITY_ORDER[a.priority] ?? 2;
+      const pb = PRIORITY_ORDER[b.priority] ?? 2;
+      if (pa !== pb) return pa - pb;
+      return new Date(b.archivedAt) - new Date(a.archivedAt);
     });
     res.json(tasks);
   } catch (err) {
@@ -96,13 +115,18 @@ router.put(
     body('subtasks').optional().isArray(),
     body('subtasks.*.title').optional().trim().notEmpty(),
     body('subtasks.*.completed').optional().isBoolean(),
+    body('archived').optional().isBoolean(),
   ],
   async (req, res) => {
     try {
       const oldTask = await Task.findById(req.params.id).populate('assignedTo', 'name');
+      const updates = { ...req.body };
+      if ('archived' in req.body) {
+        updates.archivedAt = req.body.archived ? new Date() : null;
+      }
       const task = await Task.findByIdAndUpdate(
         req.params.id,
-        { $set: req.body },
+        { $set: updates },
         { new: true }
       ).populate('assignedTo', 'name avatar email');
       if (!task) return res.status(404).json({ message: 'Task not found' });
@@ -131,6 +155,9 @@ router.put(
       }
       if (req.body.title && req.body.title !== oldTask?.title) parts.push('title updated');
       if (req.body.description !== undefined) parts.push('description updated');
+      if ('archived' in req.body) {
+        parts.push(req.body.archived ? 'archived' : 'restored from archive');
+      }
 
       const details = parts.length ? parts.join(', ') : 'Task updated';
       await logActivity({

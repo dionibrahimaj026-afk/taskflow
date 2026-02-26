@@ -10,6 +10,8 @@ const ACTION_LABELS = {
   'task.updated': 'updated task',
   'task.deleted': 'deleted task',
   'task.commented': 'commented on task',
+  'task.archived': 'archived task',
+  'task.restored': 'restored task',
 };
 
 function formatTime(dateStr) {

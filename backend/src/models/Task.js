@@ -54,6 +54,14 @@ const taskSchema = new mongoose.Schema({
     type: [commentSchema],
     default: [],
   },
+  archived: {
+    type: Boolean,
+    default: false,
+  },
+  archivedAt: {
+    type: Date,
+    default: null,
+  },
 }, { timestamps: true });
 
 taskSchema.pre('save', function (next) {
