@@ -8,10 +8,12 @@ import {
   Form,
   Alert,
   Spinner,
+  Badge,
 } from "react-bootstrap";
 import { Link } from "react-router-dom";
 import { api } from "../utils/api";
 import { useAuth } from "../context/AuthContext";
+import { canEditProject } from "../utils/projectRoles";
 import { formatDate, parseDate } from "../utils/dateUtils";
 import ProjectTrash from "../components/ProjectTrash";
 import ProjectArchive from "../components/ProjectArchive";
@@ -26,7 +28,8 @@ export default function Dashboard() {
   const [showModal, setShowModal] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
-  const [form, setForm] = useState({ title: "", description: "", dueDate: "" });
+  const [form, setForm] = useState({ title: "", description: "", dueDate: "", members: [] });
+  const [users, setUsers] = useState([]);
   const [submitting, setSubmitting] = useState(false);
 
   const fetchProjects = async () => {
@@ -56,10 +59,19 @@ export default function Dashboard() {
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      const data = await api.get("/users/list");
+      setUsers(data);
+    } catch {
+      setUsers([]);
+    }
+  };
+
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      await Promise.all([fetchProjects(), fetchArchivedProjects(), fetchTrashedProjects()]);
+      await Promise.all([fetchProjects(), fetchArchivedProjects(), fetchTrashedProjects(), fetchUsers()]);
       setLoading(false);
     };
     load();
@@ -70,12 +82,16 @@ export default function Dashboard() {
     setSubmitting(true);
     setError("");
     try {
-      await api.post("/projects", {
+      const payload = {
         title: form.title,
         description: form.description,
         dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : undefined,
-      });
-      setForm({ title: "", description: "", dueDate: "" });
+      };
+      if (form.members?.length) {
+        payload.members = form.members.map((m) => ({ user: m.user, role: m.role || "editor" }));
+      }
+      await api.post("/projects", payload);
+      setForm({ title: "", description: "", dueDate: "", members: [] });
       setShowModal(false);
       fetchProjects();
       fetchArchivedProjects();
@@ -218,7 +234,7 @@ export default function Dashboard() {
                   >
                     Open
                   </Button>
-                  {user && (
+                  {user && canEditProject(p, user.id) && (
                     <Button
                       variant="outline-success"
                       size="sm"
@@ -228,7 +244,7 @@ export default function Dashboard() {
                       ✓ Done
                     </Button>
                   )}
-                  {user && (String(p.createdBy?._id ?? p.createdBy) === String(user.id) || p.members?.some((m) => String(m?._id ?? m) === String(user.id))) && (
+                  {user && canEditProject(p, user.id) && (
                     <Button
                       variant="outline-danger"
                       size="sm"
@@ -286,6 +302,60 @@ export default function Dashboard() {
                 onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
               />
               <Form.Text className="text-muted">When should this project be finished (optional)</Form.Text>
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Add members (optional)</Form.Label>
+              <div className="d-flex gap-2 mb-2">
+                <Form.Select
+                  value={form.newMemberUser || ""}
+                  onChange={(e) => setForm({ ...form, newMemberUser: e.target.value })}
+                >
+                  <option value="">Select user...</option>
+                  {users.map((u) => (
+                    <option key={u._id} value={u._id}>{u.name}</option>
+                  ))}
+                </Form.Select>
+                <Form.Select
+                  value={form.newMemberRole || "editor"}
+                  onChange={(e) => setForm({ ...form, newMemberRole: e.target.value })}
+                  style={{ width: "auto" }}
+                >
+                  <option value="editor">Editor</option>
+                  <option value="viewer">Viewer</option>
+                </Form.Select>
+                <Button
+                  variant="outline-primary"
+                  size="sm"
+                  onClick={() => {
+                    const uid = form.newMemberUser;
+                    if (!uid) return;
+                    if ((form.members || []).some((m) => m.user === uid)) return;
+                    setForm({
+                      ...form,
+                      members: [...(form.members || []), { user: uid, role: form.newMemberRole || "editor" }],
+                      newMemberUser: "",
+                      newMemberRole: "editor",
+                    });
+                  }}
+                  disabled={!form.newMemberUser}
+                >
+                  Add
+                </Button>
+              </div>
+              {(form.members || []).map((m, i) => (
+                <div key={i} className="d-flex align-items-center gap-2 small mb-1">
+                  <span>{users.find((u) => u._id === m.user)?.name ?? m.user}</span>
+                  <Badge bg="secondary">{m.role}</Badge>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="p-0 text-danger"
+                    onClick={() => setForm({ ...form, members: (form.members || []).filter((_, idx) => idx !== i) })}
+                  >
+                    ×
+                  </Button>
+                </div>
+              ))}
             </Form.Group>
           </Modal.Body>
           <Modal.Footer>

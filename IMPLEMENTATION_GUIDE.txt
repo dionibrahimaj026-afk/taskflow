@@ -158,6 +158,8 @@ data flow, and diagrams.
     │                      │         │ status: To Do |     │
     │ createdBy ────────────┼─────────│   In Progress | Done│
     │ members[]             │         │ project ────────────┤
+    │   { user, role }      │         │                     │
+    │   role: editor|viewer │         │                     │
     │ createdAt, updatedAt  │         │ assignedTo ─────────┼──► User
     └─────────────────────┘         │ order                │
                                     │ createdAt, updatedAt  │

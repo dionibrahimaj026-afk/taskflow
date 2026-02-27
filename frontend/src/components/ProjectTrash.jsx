@@ -1,5 +1,6 @@
 import { Card, Badge, Button, ListGroup } from 'react-bootstrap';
 import { formatDate, parseDate } from '../utils/dateUtils';
+import { canEditProject, canPermanentDeleteProject } from '../utils/projectRoles';
 
 const TRASH_RETENTION_DAYS = 30;
 
@@ -37,7 +38,8 @@ export default function ProjectTrash({ projects, onRestore, onPermanentDelete, u
       <ListGroup variant="flush">
         {projects.map((p) => {
           const daysLeft = daysUntilPermanentDelete(p.deletedAt);
-          const canManage = user && (String(p.createdBy?._id ?? p.createdBy) === String(user.id) || p.members?.some((m) => String(m?._id ?? m) === String(user.id)));
+          const canRestore = user && canEditProject(p, user.id);
+          const canPermanentDelete = user && canPermanentDeleteProject(p, user.id);
           return (
             <ListGroup.Item key={p._id} className="d-flex justify-content-between align-items-start py-2">
               <div className="flex-grow-1">
@@ -54,14 +56,18 @@ export default function ProjectTrash({ projects, onRestore, onPermanentDelete, u
                   </small>
                 )}
               </div>
-              {canManage && (
+              {(canRestore || canPermanentDelete) && (
                 <div className="d-flex gap-1">
-                  <Button variant="outline-primary" size="sm" onClick={() => onRestore?.(p)}>
-                    Restore
-                  </Button>
-                  <Button variant="outline-danger" size="sm" onClick={() => onPermanentDelete?.(p)}>
-                    Delete
-                  </Button>
+                  {canRestore && (
+                    <Button variant="outline-primary" size="sm" onClick={() => onRestore?.(p)}>
+                      Restore
+                    </Button>
+                  )}
+                  {canPermanentDelete && (
+                    <Button variant="outline-danger" size="sm" onClick={() => onPermanentDelete?.(p)}>
+                      Delete
+                    </Button>
+                  )}
                 </div>
               )}
             </ListGroup.Item>

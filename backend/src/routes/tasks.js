@@ -2,17 +2,30 @@ import express from 'express';
 import { body, validationResult } from 'express-validator';
 import Task from '../models/Task.js';
 import User from '../models/User.js';
+import Project from '../models/Project.js';
 import { optionalAuth } from '../middleware/auth.js';
 import { logActivity } from '../utils/logActivity.js';
+import { hasProjectAccess, canEditTasks } from '../utils/projectRoles.js';
 
 const router = express.Router();
 router.use(optionalAuth);
 
 const PRIORITY_ORDER = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
 
+async function getProjectWithAccess(projectId, userId) {
+  const project = await Project.findById(projectId)
+    .populate('createdBy')
+    .populate('members.user');
+  if (!project) return null;
+  if (!userId || !hasProjectAccess(project, userId)) return null;
+  return project;
+}
+
 // Get all tasks for a project (excludes archived)
 router.get('/project/:projectId', async (req, res) => {
   try {
+    const project = await getProjectWithAccess(req.params.projectId, req.user?._id);
+    if (!project) return res.status(404).json({ message: 'Project not found or access denied' });
     let tasks = await Task.find({
       project: req.params.projectId,
       archived: { $ne: true },
@@ -36,6 +49,8 @@ router.get('/project/:projectId', async (req, res) => {
 // Get archived tasks for a project
 router.get('/project/:projectId/archive', async (req, res) => {
   try {
+    const project = await getProjectWithAccess(req.params.projectId, req.user?._id);
+    if (!project) return res.status(404).json({ message: 'Project not found or access denied' });
     let tasks = await Task.find({
       project: req.params.projectId,
       archived: true,
@@ -59,6 +74,8 @@ router.get('/project/:projectId/archive', async (req, res) => {
 // Get trashed (soft-deleted) tasks for a project
 router.get('/project/:projectId/trash', async (req, res) => {
   try {
+    const project = await getProjectWithAccess(req.params.projectId, req.user?._id);
+    if (!project) return res.status(404).json({ message: 'Project not found or access denied' });
     const tasks = await Task.find({
       project: req.params.projectId,
       deletedAt: { $ne: null },
@@ -77,9 +94,11 @@ router.get('/:id', async (req, res) => {
   try {
     const task = await Task.findById(req.params.id)
       .populate('assignedTo', 'name avatar email')
-      .populate('project', 'title')
+      .populate('project', 'title createdBy members')
       .populate('comments.user', 'name avatar');
     if (!task) return res.status(404).json({ message: 'Task not found' });
+    const project = await getProjectWithAccess(task.project?._id ?? task.project, req.user?._id);
+    if (!project) return res.status(404).json({ message: 'Project not found or access denied' });
     res.json(task);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -103,6 +122,13 @@ router.post(
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) return res.status(400).json({ message: errors.array()[0].msg });
+      if (!req.user) return res.status(401).json({ message: 'Please log in to create a task' });
+
+      const project = await getProjectWithAccess(req.body.project, req.user._id);
+      if (!project) return res.status(404).json({ message: 'Project not found or access denied' });
+      if (!canEditTasks(project, req.user._id)) {
+        return res.status(403).json({ message: 'Viewers cannot create tasks' });
+      }
 
       const count = await Task.countDocuments({ project: req.body.project });
       const task = await Task.create({
@@ -144,6 +170,12 @@ router.put(
   async (req, res) => {
     try {
       const oldTask = await Task.findById(req.params.id).populate('assignedTo', 'name');
+      if (!oldTask) return res.status(404).json({ message: 'Task not found' });
+      const project = await getProjectWithAccess(oldTask.project, req.user?._id);
+      if (!project) return res.status(404).json({ message: 'Project not found or access denied' });
+      if (!req.user || !canEditTasks(project, req.user._id)) {
+        return res.status(403).json({ message: 'You do not have permission to edit this task' });
+      }
       const updates = { ...req.body };
       if ('archived' in req.body) {
         updates.archivedAt = req.body.archived ? new Date() : null;
@@ -208,9 +240,15 @@ router.post(
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) return res.status(400).json({ message: errors.array()[0].msg });
+      if (!req.user) return res.status(401).json({ message: 'Please log in to add a comment' });
 
       const task = await Task.findById(req.params.id);
       if (!task) return res.status(404).json({ message: 'Task not found' });
+      const project = await getProjectWithAccess(task.project, req.user._id);
+      if (!project) return res.status(404).json({ message: 'Project not found or access denied' });
+      if (!canEditTasks(project, req.user._id)) {
+        return res.status(403).json({ message: 'Viewers cannot add comments' });
+      }
 
       const comment = {
         user: req.user?._id || null,
@@ -242,19 +280,25 @@ router.post(
 // Soft delete task (move to trash)
 router.delete('/:id', async (req, res) => {
   try {
-    const task = await Task.findByIdAndUpdate(
+    const task = await Task.findById(req.params.id);
+    if (!task) return res.status(404).json({ message: 'Task not found' });
+    const project = await getProjectWithAccess(task.project, req.user?._id);
+    if (!project) return res.status(404).json({ message: 'Project not found or access denied' });
+    if (!req.user || !canEditTasks(project, req.user._id)) {
+      return res.status(403).json({ message: 'You do not have permission to delete this task' });
+    }
+    const updated = await Task.findByIdAndUpdate(
       req.params.id,
       { $set: { deletedAt: new Date() } },
       { new: true }
     );
-    if (!task) return res.status(404).json({ message: 'Task not found' });
     await logActivity({
-      project: task.project,
+      project: updated.project,
       user: req.user,
       action: 'task.deleted',
       entityType: 'task',
-      entityId: task._id,
-      entityTitle: task.title,
+      entityId: updated._id,
+      entityTitle: updated.title,
       details: 'Task moved to trash',
     });
     res.json({ message: 'Task moved to trash' });
@@ -266,6 +310,13 @@ router.delete('/:id', async (req, res) => {
 // Restore task from trash
 router.post('/:id/restore', async (req, res) => {
   try {
+    const existing = await Task.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Task not found' });
+    const project = await getProjectWithAccess(existing.project, req.user?._id);
+    if (!project) return res.status(404).json({ message: 'Project not found or access denied' });
+    if (!req.user || !canEditTasks(project, req.user._id)) {
+      return res.status(403).json({ message: 'You do not have permission to restore this task' });
+    }
     const task = await Task.findByIdAndUpdate(
       req.params.id,
       { $set: { deletedAt: null } },
@@ -292,6 +343,13 @@ router.post('/:id/restore', async (req, res) => {
 // Permanently delete task
 router.delete('/:id/permanent', async (req, res) => {
   try {
+    const existing = await Task.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Task not found' });
+    const project = await getProjectWithAccess(existing.project, req.user?._id);
+    if (!project) return res.status(404).json({ message: 'Project not found or access denied' });
+    if (!req.user || !canEditTasks(project, req.user._id)) {
+      return res.status(403).json({ message: 'You do not have permission to permanently delete this task' });
+    }
     const task = await Task.findByIdAndDelete(req.params.id);
     if (!task) return res.status(404).json({ message: 'Task not found' });
     await logActivity({

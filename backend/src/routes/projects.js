@@ -4,16 +4,28 @@ import Project from '../models/Project.js';
 import Task from '../models/Task.js';
 import { optionalAuth } from '../middleware/auth.js';
 import { logActivity } from '../utils/logActivity.js';
+import { getProjectRole, canEditProject, canManageMembers, canDeleteProject, canPermanentDeleteProject } from '../utils/projectRoles.js';
 
 const router = express.Router();
 router.use(optionalAuth);
 
+const projectAccessFilter = (userId) => {
+  if (!userId) return {};
+  return {
+    $or: [
+      { createdBy: userId },
+      { 'members.user': userId },
+    ],
+  };
+};
+
 // Get all projects (excludes deleted and archived)
 router.get('/', async (req, res) => {
   try {
-    const projects = await Project.find({ deletedAt: null, archived: { $ne: true } })
+    const filter = { deletedAt: null, archived: { $ne: true }, ...projectAccessFilter(req.user?._id) };
+    const projects = await Project.find(filter)
       .populate('createdBy', 'name avatar')
-      .populate('members', 'name avatar')
+      .populate('members.user', 'name avatar')
       .sort({ updatedAt: -1 });
     res.json(projects);
   } catch (err) {
@@ -24,9 +36,10 @@ router.get('/', async (req, res) => {
 // Get archived projects
 router.get('/archive', async (req, res) => {
   try {
-    const projects = await Project.find({ archived: true, deletedAt: null })
+    const filter = { archived: true, deletedAt: null, ...projectAccessFilter(req.user?._id) };
+    const projects = await Project.find(filter)
       .populate('createdBy', 'name avatar')
-      .populate('members', 'name avatar')
+      .populate('members.user', 'name avatar')
       .sort({ archivedAt: -1 });
     res.json(projects);
   } catch (err) {
@@ -37,9 +50,10 @@ router.get('/archive', async (req, res) => {
 // Get trashed (soft-deleted) projects
 router.get('/trash', async (req, res) => {
   try {
-    const projects = await Project.find({ deletedAt: { $ne: null } })
+    const filter = { deletedAt: { $ne: null }, ...projectAccessFilter(req.user?._id) };
+    const projects = await Project.find(filter)
       .populate('createdBy', 'name avatar')
-      .populate('members', 'name avatar')
+      .populate('members.user', 'name avatar')
       .sort({ deletedAt: -1 });
     res.json(projects);
   } catch (err) {
@@ -52,21 +66,25 @@ router.get('/:id', async (req, res) => {
   try {
     const project = await Project.findById(req.params.id)
       .populate('createdBy', 'name avatar email')
-      .populate('members', 'name avatar email');
+      .populate('members.user', 'name avatar email');
     if (!project) return res.status(404).json({ message: 'Project not found' });
-    res.json(project);
+    const role = req.user ? getProjectRole(project, req.user._id) : null;
+    res.json({ ...project.toObject(), userRole: role });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// Create project
+// Create project (creator becomes owner)
 router.post(
   '/',
   [
     body('title').trim().notEmpty().withMessage('Title is required'),
     body('description').optional(),
     body('dueDate').optional().isISO8601(),
+    body('members').optional().isArray(),
+    body('members.*.user').optional().isMongoId(),
+    body('members.*.role').optional().isIn(['editor', 'viewer']),
   ],
   async (req, res) => {
     try {
@@ -78,6 +96,13 @@ router.post(
       if (payload.dueDate) {
         const d = new Date(payload.dueDate);
         payload.dueDate = Number.isNaN(d.getTime()) ? null : d;
+      }
+      if (payload.members) {
+        payload.members = payload.members
+          .filter((m) => m?.user)
+          .map((m) => ({ user: m.user, role: m.role || 'editor' }));
+      } else {
+        payload.members = [];
       }
       const project = await Project.create(payload);
       await project.populate('createdBy', 'name avatar');
@@ -97,27 +122,42 @@ router.post(
   }
 );
 
-// Update project - only creator can edit
+// Update project - owner or editor can edit metadata; only owner can manage members
 router.put(
   '/:id',
   [
     body('title').optional().trim().notEmpty(),
     body('description').optional(),
     body('members').optional().isArray(),
+    body('members.*.user').optional().isMongoId(),
+    body('members.*.role').optional().isIn(['editor', 'viewer']),
     body('dueDate').optional(),
     body('archived').optional().isBoolean(),
   ],
   async (req, res) => {
     try {
-      const existing = await Project.findById(req.params.id);
+      const existing = await Project.findById(req.params.id)
+        .populate('createdBy')
+        .populate('members.user');
       if (!existing) return res.status(404).json({ message: 'Project not found' });
-      const isCreator = existing.createdBy && req.user && String(req.user._id) === String(existing.createdBy);
-      const isArchiveOnly = Object.keys(req.body).length === 1 && 'archived' in req.body && req.body.archived === true;
-      if (!isCreator && !isArchiveOnly) {
-        return res.status(403).json({ message: 'Only the project creator can edit this project' });
+      if (!req.user) return res.status(401).json({ message: 'Please log in to edit this project' });
+
+      const canEdit = canEditProject(existing, req.user._id);
+      const canManage = canManageMembers(existing, req.user._id);
+
+      if ('members' in req.body && !canManage) {
+        return res.status(403).json({ message: 'Only the project owner can manage members' });
+      }
+      if (!canEdit) {
+        return res.status(403).json({ message: 'You do not have permission to edit this project' });
       }
 
       const updates = { ...req.body };
+      if (updates.members) {
+        updates.members = updates.members
+          .filter((m) => m?.user)
+          .map((m) => ({ user: m.user, role: m.role || 'editor' }));
+      }
       if (req.body.dueDate === '' || req.body.dueDate === null) {
         updates.dueDate = null;
       } else if (req.body.dueDate) {
@@ -134,7 +174,7 @@ router.put(
         { new: true }
       )
         .populate('createdBy', 'name avatar')
-        .populate('members', 'name avatar');
+        .populate('members.user', 'name avatar');
       if (!project) return res.status(404).json({ message: 'Project not found' });
       const details =
         'archived' in req.body
@@ -158,16 +198,16 @@ router.put(
   }
 );
 
-// Soft delete project (move to trash) - creator or members
+// Soft delete project (move to trash) - owner or editor
 router.delete('/:id', async (req, res) => {
   try {
-    const existing = await Project.findById(req.params.id);
+    const existing = await Project.findById(req.params.id)
+      .populate('createdBy')
+      .populate('members.user');
     if (!existing) return res.status(404).json({ message: 'Project not found' });
     if (!req.user) return res.status(401).json({ message: 'Please log in to delete a project' });
-    const isCreator = existing.createdBy && String(req.user._id) === String(existing.createdBy);
-    const isMember = existing.members?.some((m) => String(m._id || m) === String(req.user._id));
-    if (!isCreator && !isMember) {
-      return res.status(403).json({ message: 'Only the project creator or members can delete this project' });
+    if (!canDeleteProject(existing, req.user._id)) {
+      return res.status(403).json({ message: 'Only the project owner or editors can delete this project' });
     }
 
     const project = await Project.findByIdAndUpdate(
@@ -191,16 +231,16 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// Restore project from trash - creator or members
+// Restore project from trash - owner or editor
 router.post('/:id/restore', async (req, res) => {
   try {
-    const existing = await Project.findById(req.params.id);
+    const existing = await Project.findById(req.params.id)
+      .populate('createdBy')
+      .populate('members.user');
     if (!existing) return res.status(404).json({ message: 'Project not found' });
     if (!req.user) return res.status(401).json({ message: 'Please log in to restore a project' });
-    const isCreator = existing.createdBy && String(req.user._id) === String(existing.createdBy);
-    const isMember = existing.members?.some((m) => String(m._id || m) === String(req.user._id));
-    if (!isCreator && !isMember) {
-      return res.status(403).json({ message: 'Only the project creator or members can restore this project' });
+    if (!canDeleteProject(existing, req.user._id)) {
+      return res.status(403).json({ message: 'Only the project owner or editors can restore this project' });
     }
 
     const project = await Project.findByIdAndUpdate(
@@ -209,7 +249,7 @@ router.post('/:id/restore', async (req, res) => {
       { new: true }
     )
       .populate('createdBy', 'name avatar')
-      .populate('members', 'name avatar');
+      .populate('members.user', 'name avatar');
     if (!project) return res.status(404).json({ message: 'Project not found' });
     await logActivity({
       project: project._id,
@@ -226,16 +266,16 @@ router.post('/:id/restore', async (req, res) => {
   }
 });
 
-// Permanently delete project - creator or members
+// Permanently delete project - owner only
 router.delete('/:id/permanent', async (req, res) => {
   try {
-    const existing = await Project.findById(req.params.id);
+    const existing = await Project.findById(req.params.id)
+      .populate('createdBy')
+      .populate('members.user');
     if (!existing) return res.status(404).json({ message: 'Project not found' });
     if (!req.user) return res.status(401).json({ message: 'Please log in to permanently delete a project' });
-    const isCreator = existing.createdBy && String(req.user._id) === String(existing.createdBy);
-    const isMember = existing.members?.some((m) => String(m._id || m) === String(req.user._id));
-    if (!isCreator && !isMember) {
-      return res.status(403).json({ message: 'Only the project creator or members can permanently delete this project' });
+    if (!canPermanentDeleteProject(existing, req.user._id)) {
+      return res.status(403).json({ message: 'Only the project owner can permanently delete this project' });
     }
 
     const project = await Project.findByIdAndDelete(req.params.id);

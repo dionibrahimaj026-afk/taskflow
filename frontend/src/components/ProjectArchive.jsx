@@ -1,6 +1,7 @@
 import { Card, Badge, Button, ListGroup } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { formatDate } from '../utils/dateUtils';
+import { canEditProject } from '../utils/projectRoles';
 
 export default function ProjectArchive({ projects, onRestore, onDelete, user }) {
   if (projects.length === 0) {
@@ -22,7 +23,7 @@ export default function ProjectArchive({ projects, onRestore, onDelete, user }) 
       </Card.Header>
       <ListGroup variant="flush">
         {projects.map((p) => {
-          const canManage = user && (String(p.createdBy?._id ?? p.createdBy) === String(user.id) || p.members?.some((m) => String(m?._id ?? m) === String(user.id)));
+          const canManage = user && canEditProject(p, user.id);
           return (
             <ListGroup.Item key={p._id} className="d-flex justify-content-between align-items-center py-2">
               <div className="flex-grow-1">

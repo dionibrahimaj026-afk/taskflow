@@ -3,6 +3,7 @@ import { Button, Modal, Form, Alert, Spinner, InputGroup } from 'react-bootstrap
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
+import { getProjectRole, canEditProject, canManageMembers } from '../utils/projectRoles';
 import { toDateTimeLocal, formatDate, parseDate } from '../utils/dateUtils';
 import KanbanBoard from '../components/KanbanBoard';
 import TaskDetailModal from '../components/TaskDetailModal';
@@ -39,6 +40,7 @@ export default function ProjectDetail() {
         title: data?.title ?? '',
         description: data?.description ?? '',
         dueDate: toDateTimeLocal(data?.dueDate),
+        members: data?.members ?? [],
       });
     } catch (err) {
       setError(err?.message || 'Failed to load project');
@@ -196,7 +198,18 @@ export default function ProjectDetail() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await api.put(`/projects/${id}`, projectForm);
+      const payload = {
+        title: projectForm.title,
+        description: projectForm.description,
+        dueDate: projectForm.dueDate || undefined,
+      };
+      if (canManage && projectForm.members) {
+        payload.members = projectForm.members.map((m) => ({
+          user: m.user?._id ?? m.user,
+          role: m.role || 'editor',
+        })).filter((m) => m.user);
+      }
+      await api.put(`/projects/${id}`, payload);
       setShowEditModal(false);
       fetchProject();
       setActivityRefresh((k) => k + 1);
@@ -219,7 +232,9 @@ export default function ProjectDetail() {
     return <Alert variant="danger">Project not found</Alert>;
   }
 
-  const isCreator = project.createdBy && user && String(project.createdBy?._id ?? project.createdBy) === String(user.id);
+  const userRole = project.userRole ?? (user ? getProjectRole(project, user.id) : null);
+  const canEdit = user && canEditProject(project, user.id);
+  const canManage = user && canManageMembers(project, user.id);
 
   const filterTasks = (list, q) => {
     if (!q?.trim()) return list;
@@ -250,14 +265,21 @@ export default function ProjectDetail() {
           <h1 className="d-inline">{project.title}</h1>
         </div>
         <div>
-          {isCreator && (
+          {userRole && (
+            <span className="badge bg-secondary me-2" title="Your role in this project">
+              {userRole}
+            </span>
+          )}
+          {canEdit && (
             <Button variant="outline-secondary" onClick={() => setShowEditModal(true)}>
               Edit Project
             </Button>
           )}
-          <Button variant="primary" className="ms-2" onClick={() => setShowTaskModal(true)}>
-            New Task
-          </Button>
+          {canEdit && (
+            <Button variant="primary" className="ms-2" onClick={() => setShowTaskModal(true)}>
+              New Task
+            </Button>
+          )}
           <Button
             variant={showArchive ? 'secondary' : 'outline-secondary'}
             className="ms-2"
@@ -335,7 +357,7 @@ export default function ProjectDetail() {
           ) : (
             <KanbanBoard
               tasks={filteredTasks}
-              isCreator={true}
+              isCreator={canEdit}
               onStatusChange={(task, status) => handleUpdateTask(task._id, { status })}
               onPriorityChange={(task, priority) => handleUpdateTask(task._id, { priority })}
               onSubtasksChange={(task, subtasks) => handleUpdateTask(task._id, { subtasks })}
@@ -519,6 +541,86 @@ export default function ProjectDetail() {
                 onChange={(e) => setProjectForm({ ...projectForm, dueDate: e.target.value })}
               />
             </Form.Group>
+            {canManage && (
+              <Form.Group className="mb-3">
+                <Form.Label>Members (owner, editor, viewer)</Form.Label>
+                <div className="small text-muted mb-2">
+                  You are the owner. Add members with editor or viewer role.
+                </div>
+                {(projectForm.members || []).map((m, i) => (
+                  <div key={i} className="d-flex align-items-center gap-2 mb-2">
+                    <Form.Select
+                      size="sm"
+                      style={{ width: 'auto' }}
+                      value={m.role || 'editor'}
+                      onChange={(e) => {
+                        const next = [...(projectForm.members || [])];
+                        next[i] = { ...next[i], role: e.target.value };
+                        setProjectForm({ ...projectForm, members: next });
+                      }}
+                    >
+                      <option value="editor">Editor</option>
+                      <option value="viewer">Viewer</option>
+                    </Form.Select>
+                    <span className="flex-grow-1">
+                      {m.user?.name ?? m.user ?? 'Unknown'}
+                    </span>
+                    <Button
+                      variant="outline-danger"
+                      size="sm"
+                      onClick={() => {
+                        const next = (projectForm.members || []).filter((_, idx) => idx !== i);
+                        setProjectForm({ ...projectForm, members: next });
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+                <InputGroup size="sm">
+                  <Form.Select
+                    value={projectForm.newMemberUser || ''}
+                    onChange={(e) => setProjectForm({ ...projectForm, newMemberUser: e.target.value })}
+                  >
+                    <option value="">Add member...</option>
+                    {users
+                      .filter((u) => {
+                        const uid = u._id;
+                        if (String(project.createdBy?._id ?? project.createdBy) === String(uid)) return false;
+                        return !(projectForm.members || []).some((m) => String(m.user?._id ?? m.user) === String(uid));
+                      })
+                      .map((u) => (
+                        <option key={u._id} value={u._id}>{u.name}</option>
+                      ))}
+                  </Form.Select>
+                  <Form.Select
+                    value={projectForm.newMemberRole || 'editor'}
+                    onChange={(e) => setProjectForm({ ...projectForm, newMemberRole: e.target.value })}
+                    style={{ width: 'auto' }}
+                  >
+                    <option value="editor">Editor</option>
+                    <option value="viewer">Viewer</option>
+                  </Form.Select>
+                  <Button
+                    variant="outline-primary"
+                    onClick={() => {
+                      const uid = projectForm.newMemberUser;
+                      if (!uid) return;
+                      const u = users.find((x) => x._id === uid);
+                      setProjectForm({
+                        ...projectForm,
+                        members: [...(projectForm.members || []), { user: uid, role: projectForm.newMemberRole || 'editor' }],
+                        newMemberUser: '',
+                        newMemberRole: 'editor',
+                      });
+                    }}
+                    disabled={!projectForm.newMemberUser}
+                  >
+                    Add
+                  </Button>
+                </InputGroup>
+              </Form.Group>
+            )}
           </Modal.Body>
           <Modal.Footer>
             <Button variant="secondary" onClick={() => setShowEditModal(false)}>Cancel</Button>
