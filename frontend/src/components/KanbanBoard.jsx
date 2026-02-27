@@ -1,4 +1,13 @@
 import { useState } from "react";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+} from "@dnd-kit/core";
 import { Row, Col, Card, Badge, Form, InputGroup } from "react-bootstrap";
 
 const StatusIcon = ({ name, size = 18 }) => {
@@ -44,6 +53,293 @@ const PRIORITIES = [
 const PRIORITY_ORDER = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
 const sortByPriority = (a, b) => (PRIORITY_ORDER[a.priority] ?? 2) - (PRIORITY_ORDER[b.priority] ?? 2);
 
+const COLUMN_PREFIX = "col-";
+
+function TaskCardContent({
+  task,
+  isCreator,
+  onTaskClick,
+  onArchive,
+  onDelete,
+  onPriorityChange,
+  onAssigneeChange,
+  onStatusChange,
+  onSubtasksChange,
+  users = [],
+  newSubtask = {},
+  setNewSubtask = () => {},
+  compact = false,
+}) {
+  return (
+    <Card.Body className="py-2">
+      <div className="d-flex justify-content-between align-items-start">
+        <div className="flex-grow-1">
+          <strong>{task.title}</strong>
+          <Badge
+            bg={PRIORITIES.find((p) => p.key === (task.priority || "Medium"))?.variant || "secondary"}
+            className="ms-2"
+          >
+            {task.priority || "Medium"}
+          </Badge>
+          {!compact && task.comments?.length > 0 && (
+            <span className="ms-1 text-muted small" title={`${task.comments.length} comment(s)`}>
+              💬 {task.comments.length}
+            </span>
+          )}
+        </div>
+        {!compact && (
+          <div className="d-flex align-items-center gap-1">
+            {onTaskClick && (
+              <button
+                type="button"
+                className="btn btn-sm btn-link text-secondary p-0"
+                onClick={(e) => { e.stopPropagation(); onTaskClick(task); }}
+                title="View details & comments"
+              >
+                💬
+              </button>
+            )}
+            {onArchive && task.status === "Done" && (
+              <button
+                type="button"
+                className="btn btn-sm btn-link text-secondary p-0"
+                onClick={(e) => { e.stopPropagation(); onArchive(task); }}
+                title="Archive task"
+              >
+                📦
+              </button>
+            )}
+            {isCreator && (
+              <button
+                className="btn btn-sm btn-link text-danger p-0"
+                onClick={(e) => { e.stopPropagation(); onDelete?.(task); }}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      {!compact && (
+        <p className="small text-muted mb-1 mt-1">
+          {task.description || "No description"}
+        </p>
+      )}
+      {!compact && (task.subtasks?.length > 0 || isCreator) && (
+        <div className="mb-2">
+          <small className="text-muted d-block mb-1">
+            Subtasks
+            {task.subtasks?.length > 0 && (
+              <span className="ms-1">
+                ({task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length})
+              </span>
+            )}
+          </small>
+          {(task.subtasks || []).map((st, i) => (
+            <div key={st._id || i} className="d-flex align-items-center gap-1 mb-1">
+              {isCreator ? (
+                <>
+                  <Form.Check
+                    type="checkbox"
+                    checked={!!st.completed}
+                    onChange={() => {
+                      const updated = [...(task.subtasks || [])];
+                      updated[i] = { ...updated[i], completed: !updated[i].completed };
+                      onSubtasksChange?.(task, updated);
+                    }}
+                  />
+                  <span className={st.completed ? "text-decoration-line-through text-muted" : ""} style={{ flex: 1 }}>
+                    {st.title}
+                  </span>
+                  <button
+                    className="btn btn-sm btn-link text-danger p-0"
+                    onClick={() => {
+                      const updated = (task.subtasks || []).filter((_, idx) => idx !== i);
+                      onSubtasksChange?.(task, updated);
+                    }}
+                  >
+                    ×
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Form.Check type="checkbox" checked={!!st.completed} disabled />
+                  <span className={st.completed ? "text-decoration-line-through text-muted" : ""}>
+                    {st.title}
+                  </span>
+                </>
+              )}
+            </div>
+          ))}
+          {isCreator && (
+            <InputGroup size="sm" className="mt-1">
+              <Form.Control
+                placeholder="Add subtask..."
+                value={newSubtask[task._id] || ""}
+                onChange={(e) => setNewSubtask({ ...newSubtask, [task._id]: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const title = (newSubtask[task._id] || "").trim();
+                    if (title) {
+                      onSubtasksChange?.(task, [...(task.subtasks || []), { title, completed: false }]);
+                      setNewSubtask({ ...newSubtask, [task._id]: "" });
+                    }
+                  }
+                }}
+              />
+              <InputGroup.Text
+                as="button"
+                type="button"
+                className="btn btn-outline-primary"
+                onClick={() => {
+                  const title = (newSubtask[task._id] || "").trim();
+                  if (title) {
+                    onSubtasksChange?.(task, [...(task.subtasks || []), { title, completed: false }]);
+                    setNewSubtask({ ...newSubtask, [task._id]: "" });
+                  }
+                }}
+              >
+                +
+              </InputGroup.Text>
+            </InputGroup>
+          )}
+        </div>
+      )}
+      <div className="d-flex flex-wrap justify-content-between align-items-center mt-2 gap-1">
+        <div className="d-flex flex-wrap gap-1">
+          {isCreator ? (
+            <>
+              <Form.Select
+                size="sm"
+                className="form-select-sm w-auto"
+                value={task.priority || "Medium"}
+                onChange={(e) => onPriorityChange?.(task, e.target.value)}
+              >
+                {PRIORITIES.map((p) => (
+                  <option key={p.key} value={p.key}>
+                    {p.label}
+                  </option>
+                ))}
+              </Form.Select>
+              <Form.Select
+                size="sm"
+                className="form-select-sm w-auto d-inline-block me-1"
+                value={task.assignedTo?._id || ""}
+                onChange={(e) => onAssigneeChange?.(task, e.target.value || null)}
+              >
+                <option value="">Unassigned</option>
+                {users.map((u) => (
+                  <option key={u._id} value={u._id}>
+                    {u.name}
+                  </option>
+                ))}
+              </Form.Select>
+              {!compact && (
+                <Form.Select
+                  size="sm"
+                  className="form-select-sm w-auto d-inline-block"
+                  value={task.status}
+                  onChange={(e) => onStatusChange?.(task, e.target.value)}
+                >
+                  {COLUMNS.map((c) => (
+                    <option key={c.key} value={c.key}>
+                      {c.label}
+                    </option>
+                  ))}
+                </Form.Select>
+              )}
+            </>
+          ) : (
+            <span>
+              {!compact && task.assignedTo?.name && (
+                <small className="text-muted me-2">→ {task.assignedTo.name}</small>
+              )}
+              <Badge
+                bg={
+                  PRIORITIES.find((p) => p.key === (task.priority || "Medium"))?.variant || "secondary"
+                }
+                className="me-1"
+              >
+                {task.priority || "Medium"}
+              </Badge>
+              {!compact && <Badge bg="secondary">{task.status}</Badge>}
+            </span>
+          )}
+        </div>
+      </div>
+    </Card.Body>
+  );
+}
+
+function DraggableTask({
+  task,
+  isCreator,
+  onTaskClick,
+  onArchive,
+  onDelete,
+  onPriorityChange,
+  onAssigneeChange,
+  onStatusChange,
+  onSubtasksChange,
+  users,
+  newSubtask,
+  setNewSubtask,
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: task._id,
+    data: { task },
+  });
+
+  return (
+    <Card
+      ref={setNodeRef}
+      className={`mb-2 shadow-sm ${isDragging ? "opacity-50" : ""}`}
+      {...(isCreator ? { ...attributes, ...listeners } : {})}
+      style={isCreator ? { cursor: "grab" } : {}}
+    >
+      <TaskCardContent
+        task={task}
+        isCreator={isCreator}
+        onTaskClick={onTaskClick}
+        onArchive={onArchive}
+        onDelete={onDelete}
+        onPriorityChange={onPriorityChange}
+        onAssigneeChange={onAssigneeChange}
+        onStatusChange={onStatusChange}
+        onSubtasksChange={onSubtasksChange}
+        users={users}
+        newSubtask={newSubtask}
+        setNewSubtask={setNewSubtask}
+      />
+    </Card>
+  );
+}
+
+function DroppableColumn({
+  id,
+  status,
+  children,
+  isCreator,
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+
+  return (
+    <Card.Body
+      ref={setNodeRef}
+      className="min-vh-200"
+      style={{
+        minHeight: 200,
+        transition: "background-color 0.2s",
+        backgroundColor: isCreator && isOver ? "var(--bs-light)" : undefined,
+        borderRadius: 8,
+      }}
+    >
+      {children}
+    </Card.Body>
+  );
+}
+
 export default function KanbanBoard({
   tasks,
   isCreator = false,
@@ -57,6 +353,13 @@ export default function KanbanBoard({
   users = [],
 }) {
   const [newSubtask, setNewSubtask] = useState({});
+  const [activeTask, setActiveTask] = useState(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    })
+  );
 
   const tasksByStatus = COLUMNS.reduce((acc, col) => {
     acc[col.key] = tasks
@@ -65,253 +368,99 @@ export default function KanbanBoard({
     return acc;
   }, {});
 
+  const handleDragStart = (event) => {
+    const { active } = event;
+    const task = tasks.find((t) => t._id === active.id);
+    if (task) setActiveTask(task);
+  };
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    setActiveTask(null);
+
+    if (!over || !onStatusChange) return;
+
+    const task = tasks.find((t) => t._id === active.id);
+    if (!task) return;
+
+    let newStatus = null;
+    const overId = String(over.id);
+    if (overId.startsWith(COLUMN_PREFIX)) {
+      newStatus = overId.slice(COLUMN_PREFIX.length);
+    } else {
+      const targetTask = tasks.find((t) => t._id === overId);
+      if (targetTask) newStatus = targetTask.status;
+    }
+
+    if (newStatus && newStatus !== task.status) {
+      onStatusChange(task, newStatus);
+    }
+  };
+
+  const handleDragCancel = () => {
+    setActiveTask(null);
+  };
+
   return (
-    <Row>
-      {COLUMNS.map((col) => (
-        <Col key={col.key} md={6} lg={3}>
-          <Card className="mb-3">
-            <Card.Header className="d-flex justify-content-between align-items-center">
-              <Badge bg={col.variant} className="d-flex align-items-center gap-1">
-                <StatusIcon name={col.key} />
-                {col.label}
-              </Badge>
-              <span className="text-muted small">
-                {tasksByStatus[col.key]?.length || 0}
-              </span>
-            </Card.Header>
-            <Card.Body
-              className="min-vh-200"
-              style={{ minHeight: 200 }}
-              onDragOver={isCreator ? (e) => e.preventDefault() : undefined}
-              onDrop={
-                isCreator
-                  ? (e) => {
-                      e.preventDefault();
-                      const taskId = e.dataTransfer.getData("taskId");
-                      const fromStatus = e.dataTransfer.getData("fromStatus");
-                      if (taskId && fromStatus !== col.key) {
-                        const task = tasks.find((t) => t._id === taskId);
-                        if (task) onStatusChange(task, col.key);
-                      }
-                    }
-                  : undefined
-              }
-            >
-              {(tasksByStatus[col.key] || []).map((task) => (
-                <Card
-                  key={task._id}
-                  className="mb-2 shadow-sm"
-                  draggable={isCreator}
-                  onDragStart={
-                    isCreator
-                      ? (e) => {
-                          e.dataTransfer.setData("taskId", task._id);
-                          e.dataTransfer.setData("fromStatus", task.status);
-                        }
-                      : undefined
-                  }
-                >
-                  <Card.Body className="py-2">
-                    <div className="d-flex justify-content-between align-items-start">
-                      <div className="flex-grow-1">
-                        <strong>{task.title}</strong>
-                        <Badge
-                          bg={PRIORITIES.find((p) => p.key === (task.priority || "Medium"))?.variant || "secondary"}
-                          className="ms-2"
-                        >
-                          {task.priority || "Medium"}
-                        </Badge>
-                        {task.comments?.length > 0 && (
-                          <span className="ms-1 text-muted small" title={`${task.comments.length} comment(s)`}>
-                            💬 {task.comments.length}
-                          </span>
-                        )}
-                      </div>
-                      <div className="d-flex align-items-center gap-1">
-                        {onTaskClick && (
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-link text-secondary p-0"
-                            onClick={(e) => { e.stopPropagation(); onTaskClick(task); }}
-                            title="View details & comments"
-                          >
-                            💬
-                          </button>
-                        )}
-                        {onArchive && task.status === "Done" && (
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-link text-secondary p-0"
-                            onClick={(e) => { e.stopPropagation(); onArchive(task); }}
-                            title="Archive task"
-                          >
-                            📦
-                          </button>
-                        )}
-                        {isCreator && (
-                        <button
-                          className="btn btn-sm btn-link text-danger p-0"
-                          onClick={() => onDelete(task)}
-                        >
-                          ×
-                        </button>
-                        )}
-                      </div>
-                    </div>
-                    <p className="small text-muted mb-1 mt-1">
-                      {task.description || 'No description'}
-                    </p>
-                    {(task.subtasks?.length > 0 || isCreator) && (
-                      <div className="mb-2">
-                        <small className="text-muted d-block mb-1">
-                          Subtasks
-                          {task.subtasks?.length > 0 && (
-                            <span className="ms-1">
-                              ({task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length})
-                            </span>
-                          )}
-                        </small>
-                        {(task.subtasks || []).map((st, i) => (
-                          <div key={st._id || i} className="d-flex align-items-center gap-1 mb-1">
-                            {isCreator ? (
-                              <>
-                                <Form.Check
-                                  type="checkbox"
-                                  checked={!!st.completed}
-                                  onChange={() => {
-                                    const updated = [...(task.subtasks || [])];
-                                    updated[i] = { ...updated[i], completed: !updated[i].completed };
-                                    onSubtasksChange?.(task, updated);
-                                  }}
-                                />
-                                <span className={st.completed ? 'text-decoration-line-through text-muted' : ''} style={{ flex: 1 }}>
-                                  {st.title}
-                                </span>
-                                <button
-                                  className="btn btn-sm btn-link text-danger p-0"
-                                  onClick={() => {
-                                    const updated = (task.subtasks || []).filter((_, idx) => idx !== i);
-                                    onSubtasksChange?.(task, updated);
-                                  }}
-                                >
-                                  ×
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <Form.Check type="checkbox" checked={!!st.completed} disabled />
-                                <span className={st.completed ? 'text-decoration-line-through text-muted' : ''}>
-                                  {st.title}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        ))}
-                        {isCreator && (
-                          <InputGroup size="sm" className="mt-1">
-                            <Form.Control
-                              placeholder="Add subtask..."
-                              value={newSubtask[task._id] || ''}
-                              onChange={(e) => setNewSubtask({ ...newSubtask, [task._id]: e.target.value })}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  const title = (newSubtask[task._id] || '').trim();
-                                  if (title) {
-                                    onSubtasksChange?.(task, [...(task.subtasks || []), { title, completed: false }]);
-                                    setNewSubtask({ ...newSubtask, [task._id]: '' });
-                                  }
-                                }
-                              }}
-                            />
-                            <InputGroup.Text
-                              as="button"
-                              type="button"
-                              className="btn btn-outline-primary"
-                              onClick={() => {
-                                const title = (newSubtask[task._id] || '').trim();
-                                if (title) {
-                                  onSubtasksChange?.(task, [...(task.subtasks || []), { title, completed: false }]);
-                                  setNewSubtask({ ...newSubtask, [task._id]: '' });
-                                }
-                              }}
-                            >
-                              +
-                            </InputGroup.Text>
-                          </InputGroup>
-                        )}
-                      </div>
-                    )}
-                    <div className="d-flex flex-wrap justify-content-between align-items-center mt-2 gap-1">
-                      <div className="d-flex flex-wrap gap-1">
-                        {isCreator ? (
-                          <>
-                            <Form.Select
-                              size="sm"
-                              className="form-select-sm w-auto"
-                              value={task.priority || "Medium"}
-                              onChange={(e) =>
-                                onPriorityChange?.(task, e.target.value)
-                              }
-                            >
-                              {PRIORITIES.map((p) => (
-                                <option key={p.key} value={p.key}>
-                                  {p.label}
-                                </option>
-                              ))}
-                            </Form.Select>
-                            <Form.Select
-                              size="sm"
-                              className="form-select-sm w-auto d-inline-block me-1"
-                              value={task.assignedTo?._id || ""}
-                              onChange={(e) =>
-                                onAssigneeChange(task, e.target.value || null)
-                              }
-                            >
-                              <option value="">Unassigned</option>
-                              {users.map((u) => (
-                                <option key={u._id} value={u._id}>
-                                  {u.name}
-                                </option>
-                              ))}
-                            </Form.Select>
-                            <Form.Select
-                              size="sm"
-                              className="form-select-sm w-auto d-inline-block"
-                              value={task.status}
-                              onChange={(e) =>
-                                onStatusChange(task, e.target.value)
-                              }
-                            >
-                              {COLUMNS.map((c) => (
-                                <option key={c.key} value={c.key}>
-                                  {c.label}
-                                </option>
-                              ))}
-                            </Form.Select>
-                          </>
-                        ) : (
-                          <span>
-                            {task.assignedTo?.name && (
-                              <small className="text-muted me-2">
-                                → {task.assignedTo.name}
-                              </small>
-                            )}
-                            <Badge bg={PRIORITIES.find((p) => p.key === (task.priority || "Medium"))?.variant || "secondary"} className="me-1">
-                              {task.priority || "Medium"}
-                            </Badge>
-                            <Badge bg="secondary">{task.status}</Badge>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </Card.Body>
-                </Card>
-              ))}
-            </Card.Body>
+    <DndContext
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
+      <Row>
+        {COLUMNS.map((col) => (
+          <Col key={col.key} md={6} lg={3}>
+            <Card className="mb-3">
+              <Card.Header className="d-flex justify-content-between align-items-center">
+                <Badge bg={col.variant} className="d-flex align-items-center gap-1">
+                  <StatusIcon name={col.key} />
+                  {col.label}
+                </Badge>
+                <span className="text-muted small">
+                  {tasksByStatus[col.key]?.length || 0}
+                </span>
+              </Card.Header>
+              <DroppableColumn
+                id={`${COLUMN_PREFIX}${col.key}`}
+                status={col.key}
+                isCreator={isCreator}
+              >
+                {(tasksByStatus[col.key] || []).map((task) => (
+                  <DraggableTask
+                    key={task._id}
+                    task={task}
+                    isCreator={isCreator}
+                    onTaskClick={onTaskClick}
+                    onArchive={onArchive}
+                    onDelete={onDelete}
+                    onPriorityChange={onPriorityChange}
+                    onAssigneeChange={onAssigneeChange}
+                    onStatusChange={onStatusChange}
+                    onSubtasksChange={onSubtasksChange}
+                    users={users}
+                    newSubtask={newSubtask}
+                    setNewSubtask={setNewSubtask}
+                  />
+                ))}
+              </DroppableColumn>
+            </Card>
+          </Col>
+        ))}
+      </Row>
+
+      <DragOverlay dropAnimation={null}>
+        {activeTask ? (
+          <Card className="shadow-lg" style={{ cursor: "grabbing", transform: "rotate(2deg)", maxWidth: 320 }}>
+            <TaskCardContent
+              task={activeTask}
+              isCreator={false}
+              compact
+              users={users}
+            />
           </Card>
-        </Col>
-      ))}
-    </Row>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }
