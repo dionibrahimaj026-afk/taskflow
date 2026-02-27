@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Form, Button, Card, Alert, Container } from 'react-bootstrap';
+import { Form, Button, Card, Container } from 'react-bootstrap';
+import ErrorMessage from '../components/ErrorMessage';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -44,7 +45,7 @@ export default function Signup() {
       <Card>
         <Card.Body>
           <h2 className="mb-4">Sign Up</h2>
-          {error && <Alert variant="danger">{error}</Alert>}
+          <ErrorMessage message={error} onDismiss={() => setError('')} />
           <Form onSubmit={handleSubmit}>
             <Form.Group className="mb-3">
               <Form.Label>Name</Form.Label>

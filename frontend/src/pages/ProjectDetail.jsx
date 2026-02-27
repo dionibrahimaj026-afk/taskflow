@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button, Modal, Form, Alert, Spinner, InputGroup } from 'react-bootstrap';
+import ErrorMessage from '../components/ErrorMessage';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
@@ -229,7 +230,7 @@ export default function ProjectDetail() {
   }
 
   if (!project) {
-    return <Alert variant="danger">Project not found</Alert>;
+    return <ErrorMessage message="Project not found" dismissible={false} />;
   }
 
   const userRole = project.userRole ?? (user ? getProjectRole(project, user.id) : null);
@@ -311,11 +312,7 @@ export default function ProjectDetail() {
         );
       })()}
 
-      {error && (
-        <Alert variant="danger" dismissible onClose={() => setError('')}>
-          {error}
-        </Alert>
-      )}
+      <ErrorMessage message={error} onDismiss={() => setError('')} />
 
       <Form.Group className="mb-3">
         <InputGroup>

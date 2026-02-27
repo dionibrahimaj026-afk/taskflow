@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card, Form, Button, Alert } from 'react-bootstrap';
+import ErrorMessage from '../components/ErrorMessage';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
@@ -59,7 +60,7 @@ export default function Profile() {
               />
             </div>
           )}
-          {error && <Alert variant="danger">{error}</Alert>}
+          <ErrorMessage message={error} onDismiss={() => setError('')} />
           {success && <Alert variant="success">{success}</Alert>}
           <Form onSubmit={handleSubmit}>
             <Form.Group className="mb-3">

@@ -10,6 +10,7 @@ import {
   Spinner,
   Badge,
 } from "react-bootstrap";
+import ErrorMessage from "../components/ErrorMessage";
 import { Link } from "react-router-dom";
 import { api } from "../utils/api";
 import { useAuth } from "../context/AuthContext";
@@ -190,11 +191,7 @@ export default function Dashboard() {
           <Alert.Link as={Link} to="/login">Log in</Alert.Link> to create projects and set due dates.
         </Alert>
       )}
-      {error && (
-        <Alert variant="danger" dismissible onClose={() => setError("")}>
-          {error}
-        </Alert>
-      )}
+      <ErrorMessage message={error} onDismiss={() => setError("")} />
 
       {showTrash ? (
         <ProjectTrash
