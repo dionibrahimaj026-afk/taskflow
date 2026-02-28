@@ -4,6 +4,7 @@ import cors from 'cors';
 
 import { connectDB } from './config/db.js';
 import { cleanupOldTrash } from './jobs/cleanupTrash.js';
+import { autoArchiveCompletedProjects } from './jobs/autoArchiveCompleted.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 import authRoutes from './routes/auth.js';
@@ -35,4 +36,7 @@ app.listen(PORT, async () => {
   // Run trash cleanup on startup (after a short delay for DB) and every hour
   setTimeout(() => cleanupOldTrash().catch(console.error), 5000);
   setInterval(() => cleanupOldTrash().catch(console.error), 60 * 60 * 1000);
+  // Auto-archive completed projects (all tasks done, no new tasks in 5 days)
+  setTimeout(() => autoArchiveCompletedProjects().catch(console.error), 10000);
+  setInterval(() => autoArchiveCompletedProjects().catch(console.error), 24 * 60 * 60 * 1000);
 });
