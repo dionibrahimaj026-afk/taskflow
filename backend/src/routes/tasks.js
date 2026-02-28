@@ -126,11 +126,13 @@ router.post(
       }
 
       const count = await Task.countDocuments({ project: req.body.project });
-      const task = await Task.create({
-        ...req.body,
-        order: count,
-      });
+      const payload = { ...req.body, order: count };
+      if (!payload.assignedTo && req.user?._id) {
+        payload.assignedTo = req.user._id;
+      }
+      const task = await Task.create(payload);
       await task.populate('assignedTo', 'name avatar');
+      const assignNote = payload.assignedTo && !req.body.assignedTo ? ' (auto-assigned to creator)' : '';
       await logActivity({
         project: task.project,
         user: req.user,
@@ -138,7 +140,7 @@ router.post(
         entityType: 'task',
         entityId: task._id,
         entityTitle: task.title,
-        details: 'Task created',
+        details: `Task created${assignNote}`,
       });
       res.status(201).json(task);
     } catch (err) {
