@@ -27,7 +27,15 @@ export default function ProjectArchive({ projects, onRestore, onDelete, user }) 
           return (
             <ListGroup.Item key={p._id} className="d-flex justify-content-between align-items-center py-2">
               <div className="flex-grow-1">
-                <strong>{p.title}</strong>
+                <div className="d-flex align-items-center gap-2">
+                  <strong>{p.title}</strong>
+                  {p.finishRating && (
+                    <span className="text-warning" title={`Rated ${p.finishRating}/5`}>
+                      {"★".repeat(p.finishRating)}
+                      <span className="text-muted small">({p.finishRating}/5)</span>
+                    </span>
+                  )}
+                </div>
                 <small className="text-muted d-block mt-1">
                   Archived {formatDate(p.archivedAt || p.updatedAt, { dateStyle: 'short', timeStyle: 'short' })}
                   {p.createdBy?.name && ` · Created by ${p.createdBy.name}`}

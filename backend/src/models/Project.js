@@ -34,6 +34,12 @@ const projectSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  finishRating: {
+    type: Number,
+    min: 1,
+    max: 5,
+    default: null,
+  },
 }, { timestamps: true });
 
 projectSchema.pre('save', function (next) {

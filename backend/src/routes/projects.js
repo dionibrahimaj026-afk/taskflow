@@ -19,7 +19,6 @@ const projectAccessFilter = (userId) => {
   };
 };
 
-// Get all projects (excludes deleted and archived)
 router.get('/', async (req, res) => {
   try {
     const filter = { deletedAt: null, archived: { $ne: true }, ...projectAccessFilter(req.user?._id) };
@@ -33,7 +32,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get archived projects
 router.get('/archive', async (req, res) => {
   try {
     const filter = { archived: true, deletedAt: null, ...projectAccessFilter(req.user?._id) };
@@ -47,7 +45,6 @@ router.get('/archive', async (req, res) => {
   }
 });
 
-// Get trashed (soft-deleted) projects
 router.get('/trash', async (req, res) => {
   try {
     const filter = { deletedAt: { $ne: null }, ...projectAccessFilter(req.user?._id) };
@@ -61,7 +58,6 @@ router.get('/trash', async (req, res) => {
   }
 });
 
-// Get single project (include deleted for viewing in trash)
 router.get('/:id', async (req, res) => {
   try {
     const project = await Project.findById(req.params.id)
@@ -75,7 +71,6 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Create project (creator becomes owner)
 router.post(
   '/',
   [
@@ -122,7 +117,6 @@ router.post(
   }
 );
 
-// Update project - owner or editor can edit metadata; only owner can manage members
 router.put(
   '/:id',
   [
@@ -133,6 +127,7 @@ router.put(
     body('members.*.role').optional().isIn(['editor', 'viewer']),
     body('dueDate').optional(),
     body('archived').optional().isBoolean(),
+    body('finishRating').optional().isInt({ min: 1, max: 5 }),
   ],
   async (req, res) => {
     try {
@@ -167,6 +162,10 @@ router.put(
       if ('archived' in req.body) {
         updates.archivedAt = req.body.archived ? new Date() : null;
       }
+      if ('finishRating' in req.body) {
+        const r = req.body.finishRating;
+        updates.finishRating = (r >= 1 && r <= 5) ? r : null;
+      }
 
       const project = await Project.findByIdAndUpdate(
         req.params.id,
@@ -198,7 +197,6 @@ router.put(
   }
 );
 
-// Soft delete project (move to trash) - owner or editor
 router.delete('/:id', async (req, res) => {
   try {
     const existing = await Project.findById(req.params.id)
@@ -231,7 +229,6 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// Restore project from trash - owner or editor
 router.post('/:id/restore', async (req, res) => {
   try {
     const existing = await Project.findById(req.params.id)
@@ -266,7 +263,6 @@ router.post('/:id/restore', async (req, res) => {
   }
 });
 
-// Permanently delete project - owner only
 router.delete('/:id/permanent', async (req, res) => {
   try {
     const existing = await Project.findById(req.params.id)

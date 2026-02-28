@@ -29,6 +29,7 @@ export default function Dashboard() {
   const [showModal, setShowModal] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
+  const [archiveModal, setArchiveModal] = useState({ show: false, project: null, rating: null });
   const [form, setForm] = useState({ title: "", description: "", dueDate: "", members: [] });
   const [users, setUsers] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -127,9 +128,18 @@ export default function Dashboard() {
     }
   };
 
-  const handleArchiveProject = async (project) => {
+  const openArchiveModal = (project) => {
+    setArchiveModal({ show: true, project, rating: null });
+  };
+
+  const handleArchiveProject = async (rating = null) => {
+    const { project } = archiveModal;
+    if (!project) return;
     try {
-      await api.put(`/projects/${project._id}`, { archived: true });
+      const payload = { archived: true };
+      if (rating >= 1 && rating <= 5) payload.finishRating = rating;
+      await api.put(`/projects/${project._id}`, payload);
+      setArchiveModal({ show: false, project: null, rating: null });
       fetchProjects();
       fetchArchivedProjects();
     } catch (err) {
@@ -235,7 +245,7 @@ export default function Dashboard() {
                     <Button
                       variant="outline-success"
                       size="sm"
-                      onClick={() => handleArchiveProject(p)}
+                      onClick={() => openArchiveModal(p)}
                       title="Mark as done"
                     >
                       ✓ Done
@@ -364,6 +374,46 @@ export default function Dashboard() {
             </Button>
           </Modal.Footer>
         </Form>
+      </Modal>
+
+      <Modal show={archiveModal.show} onHide={() => setArchiveModal({ show: false, project: null, rating: null })}>
+        <Modal.Header closeButton>
+          <Modal.Title>Mark project as done</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {archiveModal.project && (
+            <>
+              <p className="mb-3">
+                Rate <strong>{archiveModal.project.title}</strong> (optional)
+              </p>
+              <div className="d-flex gap-2 align-items-center flex-wrap">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Button
+                    key={star}
+                    variant={archiveModal.rating === star ? "warning" : "outline-warning"}
+                    size="lg"
+                    className="p-2"
+                    onClick={() => setArchiveModal((m) => ({ ...m, rating: m.rating === star ? null : star }))}
+                    title={`${star} star${star > 1 ? "s" : ""}`}
+                  >
+                    ★
+                  </Button>
+                ))}
+                <span className="text-muted small ms-2">
+                  {archiveModal.rating ? `${archiveModal.rating}/5` : "Click to rate"}
+                </span>
+              </div>
+            </>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setArchiveModal({ show: false, project: null, rating: null })}>
+            Cancel
+          </Button>
+          <Button variant="success" onClick={() => handleArchiveProject(archiveModal.rating)}>
+            Archive {archiveModal.rating ? `(${archiveModal.rating}★)` : ""}
+          </Button>
+        </Modal.Footer>
       </Modal>
     </>
   );

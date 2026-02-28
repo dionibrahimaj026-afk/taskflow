@@ -42,6 +42,7 @@ export default function ProjectDetail() {
         description: data?.description ?? '',
         dueDate: toDateTimeLocal(data?.dueDate),
         members: data?.members ?? [],
+        finishRating: data?.finishRating ?? null,
       });
     } catch (err) {
       setError(err?.message || 'Failed to load project');
@@ -204,6 +205,9 @@ export default function ProjectDetail() {
         description: projectForm.description,
         dueDate: projectForm.dueDate || undefined,
       };
+      if (project.archived && 'finishRating' in projectForm) {
+        payload.finishRating = projectForm.finishRating ?? null;
+      }
       if (canManage && projectForm.members) {
         payload.members = projectForm.members.map((m) => ({
           user: m.user?._id ?? m.user,
@@ -264,6 +268,12 @@ export default function ProjectDetail() {
             ← Dashboard
           </Link>
           <h1 className="d-inline">{project.title}</h1>
+          {project.archived && project.finishRating && (
+            <span className="text-warning ms-2" title={`Finished rating: ${project.finishRating}/5`}>
+              {"★".repeat(project.finishRating)}
+              <span className="text-muted small">({project.finishRating}/5)</span>
+            </span>
+          )}
         </div>
         <div>
           {userRole && (
@@ -538,6 +548,34 @@ export default function ProjectDetail() {
                 onChange={(e) => setProjectForm({ ...projectForm, dueDate: e.target.value })}
               />
             </Form.Group>
+            {project.archived && canEdit && (
+              <Form.Group className="mb-3">
+                <Form.Label>Finish rating (1–5)</Form.Label>
+                <div className="d-flex gap-1 align-items-center">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Button
+                      key={star}
+                      variant={projectForm.finishRating === star ? 'warning' : 'outline-warning'}
+                      size="sm"
+                      className="p-1"
+                      onClick={() => setProjectForm({ ...projectForm, finishRating: projectForm.finishRating === star ? null : star })}
+                    >
+                      ★
+                    </Button>
+                  ))}
+                  {projectForm.finishRating && (
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="text-muted"
+                      onClick={() => setProjectForm({ ...projectForm, finishRating: null })}
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+              </Form.Group>
+            )}
             {canManage && (
               <Form.Group className="mb-3">
                 <Form.Label>Members (owner, editor, viewer)</Form.Label>
