@@ -21,7 +21,6 @@ async function getProjectWithAccess(projectId, userId) {
   return project;
 }
 
-// Get all tasks for a project (excludes archived)
 router.get('/project/:projectId', async (req, res) => {
   try {
     const project = await getProjectWithAccess(req.params.projectId, req.user?._id);
@@ -46,7 +45,6 @@ router.get('/project/:projectId', async (req, res) => {
   }
 });
 
-// Get archived tasks for a project
 router.get('/project/:projectId/archive', async (req, res) => {
   try {
     const project = await getProjectWithAccess(req.params.projectId, req.user?._id);
@@ -71,7 +69,6 @@ router.get('/project/:projectId/archive', async (req, res) => {
   }
 });
 
-// Get trashed (soft-deleted) tasks for a project
 router.get('/project/:projectId/trash', async (req, res) => {
   try {
     const project = await getProjectWithAccess(req.params.projectId, req.user?._id);
@@ -89,7 +86,6 @@ router.get('/project/:projectId/trash', async (req, res) => {
   }
 });
 
-// Get single task
 router.get('/:id', async (req, res) => {
   try {
     const task = await Task.findById(req.params.id)
@@ -105,7 +101,6 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Create task
 router.post(
   '/',
   [
@@ -152,7 +147,6 @@ router.post(
   }
 );
 
-// Update task
 router.put(
   '/:id',
   [
@@ -180,6 +174,12 @@ router.put(
       if ('archived' in req.body) {
         updates.archivedAt = req.body.archived ? new Date() : null;
       }
+      if (req.body.subtasks && Array.isArray(req.body.subtasks) && req.body.subtasks.length > 0) {
+        const allCompleted = req.body.subtasks.every((s) => s.completed);
+        if (allCompleted && oldTask.status !== 'Done') {
+          updates.status = 'Done';
+        }
+      }
       const task = await Task.findByIdAndUpdate(
         req.params.id,
         { $set: updates },
@@ -188,8 +188,8 @@ router.put(
       if (!task) return res.status(404).json({ message: 'Task not found' });
 
       const parts = [];
-      if (req.body.status && req.body.status !== oldTask?.status) {
-        parts.push(`moved to ${req.body.status}`);
+      if (updates.status && updates.status !== oldTask?.status) {
+        parts.push(`moved to ${updates.status}`);
       }
       if (req.body.priority && req.body.priority !== oldTask?.priority) {
         parts.push(`priority set to ${req.body.priority}`);
@@ -232,7 +232,6 @@ router.put(
   }
 );
 
-// Add comment to task
 router.post(
   '/:id/comments',
   [body('text').trim().notEmpty().withMessage('Comment text is required')],
@@ -277,7 +276,6 @@ router.post(
   }
 );
 
-// Soft delete task (move to trash)
 router.delete('/:id', async (req, res) => {
   try {
     const task = await Task.findById(req.params.id);
@@ -307,7 +305,6 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// Restore task from trash
 router.post('/:id/restore', async (req, res) => {
   try {
     const existing = await Task.findById(req.params.id);
@@ -340,7 +337,6 @@ router.post('/:id/restore', async (req, res) => {
   }
 });
 
-// Permanently delete task
 router.delete('/:id/permanent', async (req, res) => {
   try {
     const existing = await Task.findById(req.params.id);
