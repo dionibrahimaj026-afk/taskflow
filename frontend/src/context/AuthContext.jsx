@@ -22,6 +22,14 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (!user) return;
+    const ping = () => api.post('/users/me/ping').catch(() => {});
+    ping();
+    const id = setInterval(ping, 45 * 1000);
+    return () => clearInterval(id);
+  }, [user]);
+
   const login = (token, userData) => {
     localStorage.setItem('token', token);
     setUser(userData);

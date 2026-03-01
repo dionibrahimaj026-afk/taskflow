@@ -3,6 +3,7 @@ import { Navbar, Nav, Container, Button } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import UserStatusIndicator from './UserStatusIndicator';
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -43,14 +44,15 @@ export default function Layout() {
               </Button>
               {user ? (
                 <>
-                  <Navbar.Text className="me-3">
+                  <Navbar.Text className="me-3 d-flex align-items-center gap-2">
+                    <UserStatusIndicator isOnline={true} size={8} />
                     {user.avatar ? (
                       <img
                         src={user.avatar}
                         alt=""
                         width="28"
                         height="28"
-                        className="rounded-circle me-2"
+                        className="rounded-circle"
                       />
                     ) : null}
                     {user.name}

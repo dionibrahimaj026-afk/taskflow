@@ -13,7 +13,7 @@ const generateToken = (userId) =>
     { expiresIn: '7d' }
   );
 
-// Email signup
+
 router.post(
   '/signup',
   [
@@ -48,7 +48,6 @@ router.post(
   }
 );
 
-// Email login
 router.post(
   '/login',
   [body('email').isEmail(), body('password').notEmpty()],
@@ -61,6 +60,7 @@ router.post(
       const match = await user.comparePassword(req.body.password);
       if (!match) return res.status(401).json({ message: 'Invalid credentials' });
       const token = generateToken(user._id);
+      await User.findByIdAndUpdate(user._id, { lastSeenAt: new Date() });
       res.json({
         token,
         user: { id: user._id.toString(), email: user.email, name: user.name, role: user.role, avatar: user.avatar },
@@ -71,8 +71,8 @@ router.post(
   }
 );
 
-// Get current user
 router.get('/me', protect, async (req, res) => {
+  await User.findByIdAndUpdate(req.user._id, { lastSeenAt: new Date() });
   res.json({
     user: {
       id: req.user._id.toString(),

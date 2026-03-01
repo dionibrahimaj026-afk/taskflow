@@ -9,6 +9,7 @@ import {
   useDroppable,
 } from "@dnd-kit/core";
 import { Row, Col, Card, Badge, Form, InputGroup } from "react-bootstrap";
+import UserStatusIndicator from "./UserStatusIndicator";
 
 const StatusIcon = ({ name, size = 18 }) => {
   const icons = {
@@ -231,7 +232,7 @@ function TaskCardContent({
                 <option value="">Unassigned</option>
                 {users.map((u) => (
                   <option key={u._id} value={u._id}>
-                    {u.name}
+                    {u.isOnline ? '🟢' : '⚫'} {u.name}
                   </option>
                 ))}
               </Form.Select>
@@ -253,7 +254,12 @@ function TaskCardContent({
           ) : (
             <span>
               {!compact && task.assignedTo?.name && (
-                <small className="text-muted me-2">→ {task.assignedTo.name}</small>
+                <small className="text-muted me-2 d-inline-flex align-items-center gap-1">
+                  <UserStatusIndicator
+                    isOnline={users.find((u) => u._id === task.assignedTo?._id)?.isOnline}
+                  />
+                  → {task.assignedTo.name}
+                </small>
               )}
               <Badge
                 bg={

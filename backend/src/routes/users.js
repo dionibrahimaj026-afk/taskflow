@@ -5,17 +5,31 @@ import { protect } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Get users for assignment
-router.get('/list', async (req, res) => {
+const ONLINE_THRESHOLD_MS = 2 * 60 * 1000;
+
+router.post('/me/ping', protect, async (req, res) => {
   try {
-    const users = await User.find().select('name avatar email').sort({ name: 1 });
-    res.json(users);
+    await User.findByIdAndUpdate(req.user._id, { lastSeenAt: new Date() });
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// Get all users
+router.get('/list', async (req, res) => {
+  try {
+    const users = await User.find().select('name avatar email lastSeenAt').sort({ name: 1 });
+    const now = Date.now();
+    const withStatus = users.map((u) => ({
+      ...u.toObject(),
+      isOnline: u.lastSeenAt && now - new Date(u.lastSeenAt).getTime() < ONLINE_THRESHOLD_MS,
+    }));
+    res.json(withStatus);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.get('/', async (req, res) => {
   try {
     const users = await User.find().select('-password').sort({ createdAt: -1 });
@@ -25,7 +39,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get user profile
 router.get('/:id', protect, async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('-password');
@@ -39,7 +52,6 @@ router.get('/:id', protect, async (req, res) => {
   }
 });
 
-// Update profile
 router.put(
   '/:id',
   protect,
@@ -72,8 +84,7 @@ router.put(
   }
 );
 
-// Delete user (self only)
-router.delete('/:id', protect, async (req, res) => {
+  router.delete('/:id', protect, async (req, res) => {
   try {
     if (req.user._id.toString() !== req.params.id) {
       return res.status(403).json({ message: 'Access denied' });

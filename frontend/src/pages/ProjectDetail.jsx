@@ -403,6 +403,7 @@ export default function ProjectDetail() {
         task={selectedTask}
         show={!!selectedTask}
         onHide={() => setSelectedTask(null)}
+        users={users}
         onCommentAdded={(updatedTask) => {
           setSelectedTask(updatedTask);
           fetchTasks();
@@ -457,7 +458,9 @@ export default function ProjectDetail() {
               >
                 <option value="">Unassigned</option>
                 {users.map((u) => (
-                  <option key={u._id} value={u._id}>{u.name}</option>
+                  <option key={u._id} value={u._id}>
+                    {u.isOnline ? '🟢' : '⚫'} {u.name}
+                  </option>
                 ))}
               </Form.Select>
             </Form.Group>

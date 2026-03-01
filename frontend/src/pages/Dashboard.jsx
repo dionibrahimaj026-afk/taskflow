@@ -393,7 +393,9 @@ export default function Dashboard() {
                 >
                   <option value="">Select user...</option>
                   {users.map((u) => (
-                    <option key={u._id} value={u._id}>{u.name}</option>
+                    <option key={u._id} value={u._id}>
+                      {u.isOnline ? '🟢' : '⚫'} {u.name}
+                    </option>
                   ))}
                 </Form.Select>
                 <Form.Select

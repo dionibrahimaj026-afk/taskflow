@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Modal, Form, Button, Badge } from 'react-bootstrap';
 import { api } from '../utils/api';
+import UserStatusIndicator from './UserStatusIndicator';
 
 const COLUMNS = [
   { key: 'Todo', label: 'Todo', variant: 'secondary' },
@@ -23,7 +24,7 @@ function formatTime(dateStr) {
   return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
 }
 
-export default function TaskDetailModal({ task, show, onHide, onCommentAdded }) {
+export default function TaskDetailModal({ task, show, onHide, onCommentAdded, users = [] }) {
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -65,7 +66,12 @@ export default function TaskDetailModal({ task, show, onHide, onCommentAdded }) 
         {task.assignedTo && (
           <div className="mb-4">
             <strong>Assigned to</strong>
-            <p className="text-muted mb-0 mt-1">{task.assignedTo.name}</p>
+            <p className="text-muted mb-0 mt-1 d-flex align-items-center gap-2">
+              <UserStatusIndicator
+                isOnline={users.find((u) => u._id === task.assignedTo?._id)?.isOnline}
+              />
+              {task.assignedTo.name}
+            </p>
           </div>
         )}
 
