@@ -268,6 +268,24 @@ export default function ProjectDetail() {
             ← Dashboard
           </Link>
           <h1 className="d-inline">{project.title}</h1>
+          {user && (
+            <Button
+              variant="link"
+              className="p-0 ms-2"
+              style={{ color: project.isFavorite ? 'var(--bs-warning)' : undefined }}
+              onClick={async () => {
+                try {
+                  const res = await api.post(`/projects/${id}/favorite`);
+                  setProject((p) => ({ ...p, isFavorite: res.isFavorite }));
+                } catch {
+                  // ignore
+                }
+              }}
+              title={project.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+            >
+              {project.isFavorite ? '★' : '☆'}
+            </Button>
+          )}
           {project.archived && project.finishRating && (
             <span className="text-warning ms-2" title={`Finished rating: ${project.finishRating}/5`}>
               {"★".repeat(project.finishRating)}

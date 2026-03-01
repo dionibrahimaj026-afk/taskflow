@@ -2,7 +2,8 @@ import express from 'express';
 import { body, validationResult } from 'express-validator';
 import Project from '../models/Project.js';
 import Task from '../models/Task.js';
-import { optionalAuth } from '../middleware/auth.js';
+import User from '../models/User.js';
+import { optionalAuth, protect } from '../middleware/auth.js';
 import { logActivity } from '../utils/logActivity.js';
 import { getProjectRole, canEditProject, canManageMembers, canDeleteProject, canPermanentDeleteProject } from '../utils/projectRoles.js';
 
@@ -26,7 +27,12 @@ router.get('/', async (req, res) => {
       .populate('createdBy', 'name avatar')
       .populate('members.user', 'name avatar')
       .sort({ updatedAt: -1 });
-    res.json(projects);
+    const favIds = req.user?.favoriteProjects?.map((id) => String(id)) || [];
+    const withFav = projects.map((p) => ({
+      ...p.toObject(),
+      isFavorite: favIds.includes(String(p._id)),
+    }));
+    res.json(withFav);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -58,6 +64,28 @@ router.get('/trash', async (req, res) => {
   }
 });
 
+router.post('/:id/favorite', protect, async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    const favs = user.favoriteProjects || [];
+    const pid = project._id;
+    const idx = favs.findIndex((f) => String(f) === String(pid));
+    if (idx >= 0) {
+      favs.splice(idx, 1);
+    } else {
+      favs.push(pid);
+    }
+    user.favoriteProjects = favs;
+    await user.save();
+    res.json({ isFavorite: idx < 0, favoriteProjects: user.favoriteProjects });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const project = await Project.findById(req.params.id)
@@ -65,7 +93,9 @@ router.get('/:id', async (req, res) => {
       .populate('members.user', 'name avatar email');
     if (!project) return res.status(404).json({ message: 'Project not found' });
     const role = req.user ? getProjectRole(project, req.user._id) : null;
-    res.json({ ...project.toObject(), userRole: role });
+    const favIds = req.user?.favoriteProjects?.map((id) => String(id)) || [];
+    const isFavorite = favIds.includes(String(project._id));
+    res.json({ ...project.toObject(), userRole: role, isFavorite });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

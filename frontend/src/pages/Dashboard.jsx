@@ -167,6 +167,20 @@ export default function Dashboard() {
     }
   };
 
+  const handleToggleFavorite = async (project) => {
+    if (!user) return;
+    try {
+      const res = await api.post(`/projects/${project._id}/favorite`);
+      setProjects((prev) =>
+        prev.map((p) =>
+          p._id === project._id ? { ...p, isFavorite: res.isFavorite } : p
+        )
+      );
+    } catch (err) {
+      setError(err.message || "Failed to update favorite");
+    }
+  };
+
   if (loading) {
     return (
       <div className="text-center py-5">
@@ -218,12 +232,71 @@ export default function Dashboard() {
           user={user}
         />
       ) : (
+      <>
+        {projects.filter((p) => p.isFavorite).length > 0 && (
+          <Card className="mb-4 border-warning" style={{ borderWidth: 2 }}>
+            <Card.Header className="bg-warning bg-opacity-10 py-2">
+              <span className="me-2">⭐</span>
+              <strong>Favorites</strong>
+            </Card.Header>
+            <Card.Body className="py-2">
+              <Row xs={1} md={2} lg={4} className="g-2">
+                {projects
+                  .filter((p) => p.isFavorite)
+                  .map((p) => (
+                    <Col key={p._id}>
+                      <Card className="h-100 border-warning">
+                        <Card.Body className="py-2 d-flex justify-content-between align-items-start">
+                          <div className="flex-grow-1 min-w-0">
+                            <Card.Title className="small mb-0 text-truncate">{p.title}</Card.Title>
+                            <Button
+                              as={Link}
+                              to={`/project/${p._id}`}
+                              variant="primary"
+                              size="sm"
+                              className="mt-1"
+                            >
+                              Open
+                            </Button>
+                          </div>
+                          {user && (
+                            <Button
+                              variant="link"
+                              className="p-0 text-warning"
+                              onClick={() => handleToggleFavorite(p)}
+                              title="Remove from favorites"
+                            >
+                              ★
+                            </Button>
+                          )}
+                        </Card.Body>
+                      </Card>
+                    </Col>
+                  ))}
+              </Row>
+            </Card.Body>
+          </Card>
+        )}
       <Row xs={1} md={2} lg={3} className="g-4">
-        {projects.map((p) => (
+        {projects
+          .filter((p) => !p.isFavorite)
+          .map((p) => (
           <Col key={p._id}>
             <Card>
               <Card.Body>
-                <Card.Title>{p.title}</Card.Title>
+                <div className="d-flex justify-content-between align-items-start">
+                  <Card.Title className="mb-0">{p.title}</Card.Title>
+                  {user && (
+                    <Button
+                      variant="link"
+                      className="p-0 text-muted"
+                      onClick={() => handleToggleFavorite(p)}
+                      title={p.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                    >
+                      {p.isFavorite ? "★" : "☆"}
+                    </Button>
+                  )}
+                </div>
                 <Card.Text className="text-muted small">
                   {p.description || "No description"}
                 </Card.Text>
@@ -266,6 +339,7 @@ export default function Dashboard() {
           </Col>
         ))}
       </Row>
+      </>
       )}
 
       {projects.length === 0 && !loading && !showTrash && !showArchive && (

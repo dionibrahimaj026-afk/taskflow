@@ -28,6 +28,10 @@ const userSchema = new mongoose.Schema({
     enum: ['user', 'admin'],
     default: 'user',
   },
+  favoriteProjects: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Project',
+  }],
 }, { timestamps: true });
 
 userSchema.pre('save', async function (next) {
