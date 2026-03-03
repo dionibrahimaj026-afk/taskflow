@@ -9,6 +9,7 @@ import { toDateTimeLocal, formatDate, parseDate } from '../utils/dateUtils';
 import KanbanBoard from '../components/KanbanBoard';
 import TaskDetailModal from '../components/TaskDetailModal';
 import TaskArchive from '../components/TaskArchive';
+import TaskStats from '../components/TaskStats';
 import ActivityLog from '../components/ActivityLog';
 
 export default function ProjectDetail() {
@@ -361,6 +362,12 @@ export default function ProjectDetail() {
 
       <div className="row">
         <div className="col-lg-8">
+          {!showArchive && !showTrash && (
+            <TaskStats
+              tasks={tasks}
+              archivedCount={archivedTasks.length}
+            />
+          )}
           {searchQuery && filteredTasks.length === 0 && !showArchive && !showTrash && (
             <Alert variant="info">No tasks match your search. Try different keywords.</Alert>
           )}

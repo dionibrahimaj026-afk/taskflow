@@ -12,6 +12,44 @@ router.use(optionalAuth);
 
 const PRIORITY_ORDER = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
 
+async function getTaskProjectFilter(userId) {
+  if (!userId) return { project: { $in: [] } };
+  const projects = await Project.find({
+    deletedAt: null,
+    archived: { $ne: true },
+    $or: [{ createdBy: userId }, { 'members.user': userId }],
+  }).select('_id');
+  return { project: { $in: projects.map((p) => p._id) } };
+}
+
+router.get('/stats', async (req, res) => {
+  try {
+    const projectFilter = await getTaskProjectFilter(req.user?._id);
+    const [active, archived] = await Promise.all([
+      Task.aggregate([
+        { $match: { ...projectFilter, archived: { $ne: true }, deletedAt: null } },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+      Task.countDocuments({ ...projectFilter, archived: true, deletedAt: null }),
+    ]);
+    const byStatus = { Todo: 0, Active: 0, Testing: 0, Done: 0 };
+    let total = 0;
+    for (const row of active) {
+      byStatus[row._id] = row.count;
+      total += row.count;
+    }
+    res.json({
+      total,
+      done: byStatus.Done,
+      byStatus,
+      archived,
+      completionPct: total > 0 ? Math.round((byStatus.Done / total) * 100) : 0,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 async function getProjectWithAccess(projectId, userId) {
   const project = await Project.findById(projectId)
     .populate('createdBy')
@@ -32,6 +70,7 @@ router.get('/project/:projectId', async (req, res) => {
     })
       .populate('assignedTo', 'name avatar email')
       .populate('comments.user', 'name avatar')
+      .populate('comments.mentions', 'name avatar')
       .sort({ order: 1, createdAt: 1 });
     tasks = tasks.sort((a, b) => {
       const pa = PRIORITY_ORDER[a.priority] ?? 2;
@@ -56,6 +95,7 @@ router.get('/project/:projectId/archive', async (req, res) => {
     })
       .populate('assignedTo', 'name avatar email')
       .populate('comments.user', 'name avatar')
+      .populate('comments.mentions', 'name avatar')
       .sort({ archivedAt: -1 });
     tasks = tasks.sort((a, b) => {
       const pa = PRIORITY_ORDER[a.priority] ?? 2;
@@ -79,6 +119,7 @@ router.get('/project/:projectId/trash', async (req, res) => {
     })
       .populate('assignedTo', 'name avatar email')
       .populate('comments.user', 'name avatar')
+      .populate('comments.mentions', 'name avatar')
       .sort({ deletedAt: -1 });
     res.json(tasks);
   } catch (err) {
@@ -91,7 +132,8 @@ router.get('/:id', async (req, res) => {
     const task = await Task.findById(req.params.id)
       .populate('assignedTo', 'name avatar email')
       .populate('project', 'title createdBy members')
-      .populate('comments.user', 'name avatar');
+      .populate('comments.user', 'name avatar')
+      .populate('comments.mentions', 'name avatar');
     if (!task) return res.status(404).json({ message: 'Task not found' });
     const project = await getProjectWithAccess(task.project?._id ?? task.project, req.user?._id);
     if (!project) return res.status(404).json({ message: 'Project not found or access denied' });
@@ -236,7 +278,11 @@ router.put(
 
 router.post(
   '/:id/comments',
-  [body('text').trim().notEmpty().withMessage('Comment text is required')],
+  [
+    body('text').trim().notEmpty().withMessage('Comment text is required'),
+    body('mentions').optional().isArray(),
+    body('mentions.*').optional().isMongoId(),
+  ],
   async (req, res) => {
     try {
       const errors = validationResult(req);
@@ -251,14 +297,19 @@ router.post(
         return res.status(403).json({ message: 'Viewers cannot add comments' });
       }
 
+      const mentions = Array.isArray(req.body.mentions)
+        ? req.body.mentions.filter((id) => id)
+        : [];
       const comment = {
         user: req.user?._id || null,
         text: req.body.text.trim(),
+        mentions: mentions,
         createdAt: new Date(),
       };
       task.comments.push(comment);
       await task.save();
       await task.populate('comments.user', 'name avatar');
+      await task.populate('comments.mentions', 'name avatar');
       await task.populate('assignedTo', 'name avatar email');
 
       await logActivity({
@@ -322,7 +373,8 @@ router.post('/:id/restore', async (req, res) => {
       { new: true }
     )
       .populate('assignedTo', 'name avatar email')
-      .populate('comments.user', 'name avatar');
+      .populate('comments.user', 'name avatar')
+      .populate('comments.mentions', 'name avatar');
     if (!task) return res.status(404).json({ message: 'Task not found' });
     await logActivity({
       project: task.project,

@@ -1,7 +1,4 @@
-/**
- * One-time migration: Update old task statuses to new values (Todo, Active, Testing, Done)
- * Run with: node src/scripts/migrate-task-statuses.js
- */
+
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import Task from '../models/Task.js';

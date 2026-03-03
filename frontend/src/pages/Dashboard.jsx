@@ -18,6 +18,7 @@ import { canEditProject } from "../utils/projectRoles";
 import { formatDate, parseDate } from "../utils/dateUtils";
 import ProjectTrash from "../components/ProjectTrash";
 import ProjectArchive from "../components/ProjectArchive";
+import TaskStats from "../components/TaskStats";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -33,6 +34,7 @@ export default function Dashboard() {
   const [form, setForm] = useState({ title: "", description: "", dueDate: "", members: [] });
   const [users, setUsers] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [taskStats, setTaskStats] = useState(null);
 
   const fetchProjects = async () => {
     try {
@@ -70,10 +72,19 @@ export default function Dashboard() {
     }
   };
 
+  const fetchTaskStats = async () => {
+    try {
+      const data = await api.get("/tasks/stats");
+      setTaskStats(data);
+    } catch {
+      setTaskStats(null);
+    }
+  };
+
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      await Promise.all([fetchProjects(), fetchArchivedProjects(), fetchTrashedProjects(), fetchUsers()]);
+      await Promise.all([fetchProjects(), fetchArchivedProjects(), fetchTrashedProjects(), fetchUsers(), fetchTaskStats()]);
       setLoading(false);
     };
     load();
@@ -233,6 +244,9 @@ export default function Dashboard() {
         />
       ) : (
       <>
+        {user && taskStats && (
+          <TaskStats stats={taskStats} compact={false} />
+        )}
         {projects.filter((p) => p.isFavorite).length > 0 && (
           <Card className="mb-4 border-warning" style={{ borderWidth: 2 }}>
             <Card.Header className="bg-warning bg-opacity-10 py-2">

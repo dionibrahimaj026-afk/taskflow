@@ -35,3 +35,6 @@ coverage/
 .temp/
 tmp/
 temp/
+
+# Study / answers (not for version control)
+QUESTIONS_AND_ANSWERS.md
