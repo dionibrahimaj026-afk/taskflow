@@ -1,11 +1,73 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import User from '../models/User.js';
+import Task from '../models/Task.js';
+import Activity from '../models/Activity.js';
+import Project from '../models/Project.js';
 import { protect } from '../middleware/auth.js';
 
 const router = express.Router();
 
 const ONLINE_THRESHOLD_MS = 2 * 60 * 1000;
+
+async function getTaskProjectFilter(userId) {
+  if (!userId) return { project: { $in: [] } };
+  const projects = await Project.find({
+    deletedAt: null,
+    archived: { $ne: true },
+    $or: [{ createdBy: userId }, { 'members.user': userId }],
+  }).select('_id');
+  return { project: { $in: projects.map((p) => p._id) } };
+}
+
+router.get('/me/productivity', protect, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const projectFilter = await getTaskProjectFilter(userId);
+
+    const [assignedAgg, tasksCreated, commentsAdded] = await Promise.all([
+      Task.aggregate([
+        {
+          $match: {
+            ...projectFilter,
+            assignedTo: userId,
+            archived: { $ne: true },
+            deletedAt: null,
+          },
+        },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+      Activity.countDocuments({
+        user: userId,
+        action: 'task.created',
+      }),
+      Activity.countDocuments({
+        user: userId,
+        action: 'task.commented',
+      }),
+    ]);
+
+    const byStatus = { Todo: 0, Active: 0, Testing: 0, Done: 0 };
+    let tasksAssigned = 0;
+    for (const row of assignedAgg) {
+      byStatus[row._id] = row.count;
+      tasksAssigned += row.count;
+    }
+    const tasksDone = byStatus.Done || 0;
+    const completionRate = tasksAssigned > 0 ? Math.round((tasksDone / tasksAssigned) * 100) : 0;
+
+    res.json({
+      tasksAssigned,
+      tasksDone,
+      tasksByStatus: byStatus,
+      completionRate,
+      tasksCreated,
+      commentsAdded,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 router.post('/me/ping', protect, async (req, res) => {
   try {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, Form, Button, Alert } from 'react-bootstrap';
 import ErrorMessage from '../components/ErrorMessage';
+import UserProductivity from '../components/UserProductivity';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
@@ -47,6 +48,7 @@ export default function Profile() {
   return (
     <>
       <h1>Profile</h1>
+      <UserProductivity />
       <Card style={{ maxWidth: 500 }}>
         <Card.Body>
           {user?.avatar && (
