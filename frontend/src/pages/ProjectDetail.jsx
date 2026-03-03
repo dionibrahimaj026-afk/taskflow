@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button, Modal, Form, Alert, Spinner, InputGroup } from 'react-bootstrap';
 import ErrorMessage from '../components/ErrorMessage';
 import { Link, useParams } from 'react-router-dom';
@@ -33,6 +33,7 @@ export default function ProjectDetail() {
   const [archivedTasks, setArchivedTasks] = useState([]);
   const [trashedTasks, setTrashedTasks] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef(null);
 
   const fetchProject = async () => {
     try {
@@ -98,6 +99,20 @@ export default function ProjectDetail() {
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.key === 'n') {
+        e.preventDefault();
+        if (canEdit && !showTaskModal) setShowTaskModal(true);
+      } else if (e.ctrlKey && e.key === 'f') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [canEdit, showTaskModal]);
 
   const handleCreateTask = async (e) => {
     e.preventDefault();
@@ -306,7 +321,7 @@ export default function ProjectDetail() {
             </Button>
           )}
           {canEdit && (
-            <Button variant="primary" className="ms-2" onClick={() => setShowTaskModal(true)}>
+            <Button variant="primary" className="ms-2" onClick={() => setShowTaskModal(true)} title="Ctrl+N">
               New Task
             </Button>
           )}
@@ -347,8 +362,9 @@ export default function ProjectDetail() {
         <InputGroup>
           <InputGroup.Text>🔍</InputGroup.Text>
           <Form.Control
+            ref={searchInputRef}
             type="search"
-            placeholder="Search tasks by title, description, assignee..."
+            placeholder="Search tasks by title, description, assignee... (Ctrl+F)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
