@@ -104,7 +104,8 @@ export default function ProjectDetail() {
     const handleKeyDown = (e) => {
       if (e.ctrlKey && e.key === 'n') {
         e.preventDefault();
-        if (canEdit && !showTaskModal) setShowTaskModal(true);
+        const editable = user && project && canEditProject(project, user.id);
+        if (editable && !showTaskModal) setShowTaskModal(true);
       } else if (e.ctrlKey && e.key === 'f') {
         e.preventDefault();
         searchInputRef.current?.focus();
@@ -112,7 +113,7 @@ export default function ProjectDetail() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [canEdit, showTaskModal]);
+  }, [user, project, showTaskModal]);
 
   const handleCreateTask = async (e) => {
     e.preventDefault();
