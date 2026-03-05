@@ -1,0 +1,26 @@
+@keyframes loginFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes loginShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+.login-card {
+  animation: loginFadeInUp 0.5s ease-out forwards;
+}
+
+.login-card.shake {
+  animation: loginShake 0.4s ease-in-out;
+}

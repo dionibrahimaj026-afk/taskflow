@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Form, Button, Card, Container } from 'react-bootstrap';
+import { useState, useEffect } from 'react';
+import { Form, Button, Card, Container, Spinner } from 'react-bootstrap';
+import './Login.css';
 import ErrorMessage from '../components/ErrorMessage';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -11,6 +12,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [shake, setShake] = useState(false);
   const { login } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -25,10 +27,18 @@ export default function Login() {
       navigate('/');
     } catch (err) {
       setError(err.message || 'Login failed');
+      setShake(true);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (shake) {
+      const t = setTimeout(() => setShake(false), 400);
+      return () => clearTimeout(t);
+    }
+  }, [shake]);
 
   return (
     <Container className="py-5" style={{ maxWidth: 420 }}>
@@ -41,7 +51,7 @@ export default function Login() {
       >
         {theme === 'light' ? '🌙' : '☀️'}
       </Button>
-      <Card>
+      <Card className={`login-card ${shake ? 'shake' : ''}`}>
         <Card.Body>
           <h2 className="mb-4">Sign In</h2>
           <ErrorMessage message={error} onDismiss={() => setError('')} />
@@ -65,7 +75,14 @@ export default function Login() {
               />
             </Form.Group>
             <Button variant="primary" type="submit" className="w-100 mb-3" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? (
+                <>
+                  <Spinner animation="border" size="sm" className="me-2" />
+                  Signing in...
+                </>
+              ) : (
+                'Sign In'
+              )}
             </Button>
           </Form>
           <p className="mt-3 text-center text-muted">
