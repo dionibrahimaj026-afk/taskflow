@@ -28,9 +28,16 @@ router.get('/', async (req, res) => {
       .populate('members.user', 'name avatar')
       .sort({ updatedAt: -1 });
     const favIds = req.user?.favoriteProjects?.map((id) => String(id)) || [];
+    const projectIds = projects.map((p) => p._id);
+    const counts = await Task.aggregate([
+      { $match: { project: { $in: projectIds }, archived: { $ne: true }, deletedAt: null } },
+      { $group: { _id: '$project', count: { $sum: 1 } } },
+    ]);
+    const countMap = Object.fromEntries(counts.map((c) => [String(c._id), c.count]));
     const withFav = projects.map((p) => ({
       ...p.toObject(),
       isFavorite: favIds.includes(String(p._id)),
+      taskCount: countMap[String(p._id)] ?? 0,
     }));
     res.json(withFav);
   } catch (err) {

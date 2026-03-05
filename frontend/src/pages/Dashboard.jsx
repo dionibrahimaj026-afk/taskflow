@@ -263,6 +263,11 @@ export default function Dashboard() {
                         <Card.Body className="py-2 d-flex justify-content-between align-items-start">
                           <div className="flex-grow-1 min-w-0">
                             <Card.Title className="small mb-0 text-truncate">{p.title}</Card.Title>
+                            {(p.taskCount ?? 0) > 0 && (
+                              <Badge bg="secondary" className="small me-1">
+                                {p.taskCount} task{p.taskCount !== 1 ? 's' : ''}
+                              </Badge>
+                            )}
                             <Button
                               as={Link}
                               to={`/project/${p._id}`}
@@ -314,6 +319,11 @@ export default function Dashboard() {
                 <Card.Text className="text-muted small">
                   {p.description || "No description"}
                 </Card.Text>
+                {(p.taskCount ?? 0) > 0 && (
+                  <Badge bg="secondary" className="mb-2">
+                    {p.taskCount} task{p.taskCount !== 1 ? 's' : ''}
+                  </Badge>
+                )}
                 {parseDate(p.dueDate) && (
                   <Card.Text className="small">
                     Due: {formatDate(p.dueDate, { dateStyle: "short", timeStyle: "short" })}

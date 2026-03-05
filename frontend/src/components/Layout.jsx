@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import UserStatusIndicator from './UserStatusIndicator';
+import TaskCounter from './TaskCounter';
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -25,8 +26,9 @@ export default function Layout() {
           <Navbar.Toggle aria-controls="nav" />
           <Navbar.Collapse id="nav">
             <Nav className="me-auto">
-              <Nav.Link as={Link} to="/">
+              <Nav.Link as={Link} to="/" className="d-flex align-items-center">
                 Dashboard
+                <TaskCounter />
               </Nav.Link>
               <Nav.Link as={Link} to="/profile">
                 Profile
