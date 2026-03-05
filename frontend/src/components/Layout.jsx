@@ -33,6 +33,9 @@ export default function Layout() {
               <Nav.Link as={Link} to="/profile">
                 Profile
               </Nav.Link>
+              <Nav.Link as={Link} to="/settings">
+                Settings
+              </Nav.Link>
             </Nav>
             <Nav>
               <Button

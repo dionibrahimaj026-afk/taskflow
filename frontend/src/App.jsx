@@ -10,6 +10,7 @@ import AuthCallback from './pages/AuthCallback';
 import Dashboard from './pages/Dashboard';
 import ProjectDetail from './pages/ProjectDetail';
 import Profile from './pages/Profile';
+import Settings from './pages/Settings';
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
             <Route index element={<Dashboard />} />
             <Route path="project/:id" element={<ProjectDetail />} />
             <Route path="profile" element={<Profile />} />
+            <Route path="settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
